@@ -1,26 +1,176 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * LifeOS design tokens.
+ * Colour is for signalling, type is for hierarchy.
+ *   mark   = "now / the one thing" (the only bold colour, used sparingly)
+ *   danger = overdue / destructive (text and small marks only, never big fills)
+ * See docs/DESIGN.md for the reasoning.
+ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+  --canvas: #f3f4f1; /* Fog */
+  --surface: #fbfbf9; /* Sheet */
+  --sunken: #e9eae5;
+  --ink: #15171a; /* Ink */
+  --ink-2: #5c6168; /* Graphite */
+  --ink-3: #8a8f95;
+  --rule: #dcded8; /* Rule */
+  --rule-strong: #c6c9c2;
+  --mark: #f2c14e; /* Highlighter */
+  --mark-ink: #15171a;
+  --mark-soft: #f7e3b0;
+  --danger: #a8432f; /* Brick */
+  --success: #3f6e4f;
+  --shadow-float: 0 1px 2px rgb(21 23 26 / 0.06), 0 12px 32px -8px rgb(21 23 26 / 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #121314;
+    --surface: #191b1d;
+    --sunken: #222528;
+    --ink: #ecece8;
+    --ink-2: #9ea2a8;
+    --ink-3: #6f747a;
+    --rule: #2b2e31;
+    --rule-strong: #3a3e42;
+    --mark: #e9b949;
+    --mark-ink: #121314;
+    --mark-soft: #4a3d1c;
+    --danger: #e07a62;
+    --success: #7fb08d;
+    --shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -8px rgb(0 0 0 / 0.6);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #121314;
+  --surface: #191b1d;
+  --sunken: #222528;
+  --ink: #ecece8;
+  --ink-2: #9ea2a8;
+  --ink-3: #6f747a;
+  --rule: #2b2e31;
+  --rule-strong: #3a3e42;
+  --mark: #e9b949;
+  --mark-ink: #121314;
+  --mark-soft: #4a3d1c;
+  --danger: #e07a62;
+  --success: #7fb08d;
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px -8px rgb(0 0 0 / 0.6);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-mark: var(--mark);
+  --color-mark-ink: var(--mark-ink);
+  --color-mark-soft: var(--mark-soft);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-serif), ui-serif, Georgia, serif;
+
+  --shadow-float: var(--shadow-float);
+}
+
+@theme {
+  /* Type scale: UI runs on 13/15/17, display steps on the serif. */
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1rem;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+  --text-lead: 1.0625rem;
+  --text-lead--line-height: 1.5rem;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.625rem;
+  --text-h2: 1.625rem;
+  --text-h2--line-height: 2rem;
+  --text-h1: 2.125rem;
+  --text-h1--line-height: 2.5rem;
+  --text-display: 3.25rem;
+  --text-display--line-height: 1;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-sweep: sweep 700ms var(--ease-out-soft) 200ms both;
+  --animate-pop: pop 160ms var(--ease-out-soft) both;
+  --animate-rise: rise 180ms var(--ease-out-soft) both;
+
+  @keyframes sweep {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--ink);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-feature-settings: "ss01" 0;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--mark-soft);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  dialog::backdrop {
+    background: rgb(18 19 20 / 0.32);
+  }
+  [data-theme="dark"] dialog::backdrop {
+    background: rgb(0 0 0 / 0.6);
+  }
+  input, textarea, select, button {
+    font: inherit;
+    color: inherit;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

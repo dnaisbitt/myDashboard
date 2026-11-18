@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LifeOS
 
-## Getting Started
+A personal life-management web app. Next.js 16 (App Router, Cache Components) + TypeScript + Tailwind v4, Supabase (Postgres, Auth, RLS), installable as a PWA.
 
-First, run the development server:
+- Design plan: [docs/DESIGN.md](docs/DESIGN.md)
+- Database: [supabase/migrations](supabase/migrations)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Setup (your steps)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+These need your accounts. Nothing here costs money.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Create a Supabase project** at supabase.com (free plan, region *West EU (London)*). Save the database password somewhere safe.
+2. **Run the migrations.** In the Supabase dashboard open *SQL Editor*, paste the contents of each file in `supabase/migrations/` in filename order, and run each one.
+3. **Create your login.** Go to *Authentication → Users → Add user → Create new user*, enter your email and a strong password, and tick *Auto Confirm User*.
+4. **Turn off public sign-ups.** Go to *Authentication → Sign In / Providers* and disable *Allow new users to sign up*. LifeOS has no sign-up page, and this stops anyone else creating an account on your project.
+5. **Local env.** Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Project Settings → API keys). Never use the secret / service-role key.
+6. **Run it:** `npm install`, then `npm run dev`, then open http://localhost:3000 and sign in.
+7. **Deploy (Vercel).** Push the repo to GitHub, import it in Vercel (Hobby plan), add the same two env vars, and deploy. Then in Supabase go to *Authentication → URL Configuration* and set *Site URL* to your Vercel URL.
+8. **Install on the Pixel 7.** Open the Vercel URL in Chrome, then *⋮ → Add to Home screen / Install app*.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Production build |
+| `npm run typecheck` | Route type generation + `tsc` |
+| `npm run lint` | ESLint |
+| `npm run test:db` | Applies all migrations to an in-memory Postgres 17 (PGlite) and checks RLS isolation and constraints |
+| `npm run check` | All of the above except build |
 
-To learn more about Next.js, take a look at the following resources:
+Dev only: `/design` (component gallery) and `/design/today` (Today rendered from a labelled fixture for layout review). Both 404 in production.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Security model
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Every table has Row Level Security: owner-only select/insert/update/delete. Signed-out (anon) requests have no table access.
+- Cross-table links use composite foreign keys `(id, user_id)`, so a row can never point at another user's row.
+- The browser only ever holds the publishable key. AI keys are server-only env vars, read in `src/lib/ai/provider.ts`.
+- `src/proxy.ts` refreshes the session and redirects signed-out visitors. Every data read also re-verifies the JWT (`getClaims`), and RLS enforces access regardless.
 
-## Deploy on Vercel
+## Free-tier facts checked (Nov 2026)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Supabase Free** pauses a project after about 7 days of low activity. Phase 7 reminders will run inside the database (pg_cron), which should also keep it active. That will be verified, not assumed.
+- **Vercel Hobby** cron jobs run at most **once a day**, with ±59 minutes timing precision. They're unusable for timed reminders, so Phase 7 will use Supabase `pg_cron` + `pg_net` to call a push endpoint instead.
