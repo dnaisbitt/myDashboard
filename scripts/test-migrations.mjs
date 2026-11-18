@@ -38,7 +38,8 @@ await db.exec(`
   grant usage on schema public to anon, authenticated;
   grant usage on schema auth to anon, authenticated;
   grant execute on function auth.uid() to anon, authenticated;
-  alter default privileges in schema public grant all on tables to anon, authenticated;
+  -- Like current Supabase projects: NO automatic table privileges for API roles.
+  -- Migrations must grant explicitly (this is what caught the 42501 in production).
 `);
 
 // --- Apply migrations ---------------------------------------------------------
