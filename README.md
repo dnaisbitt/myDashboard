@@ -10,7 +10,7 @@ A personal life-management web app. Next.js 16 (App Router, Cache Components) + 
 These need your accounts. Nothing here costs money.
 
 1. **Create a Supabase project** at supabase.com (free plan, region *West EU (London)*). Save the database password somewhere safe.
-2. **Run the migrations.** In the Supabase dashboard open *SQL Editor*, paste the contents of each file in `supabase/migrations/` in filename order, and run each one.
+2. **Run the migrations** (and again whenever a new file appears in `supabase/migrations/`, *before* deploying the code that needs it). In the Supabase dashboard open *SQL Editor*, paste the contents of each file in `supabase/migrations/` in filename order, and run each one.
 3. **Create your login.** Go to *Authentication → Users → Add user → Create new user*, enter your email and a strong password, and tick *Auto Confirm User*.
 4. **Turn off public sign-ups.** Go to *Authentication → Sign In / Providers* and disable *Allow new users to sign up*. LifeOS has no sign-up page, and this stops anyone else creating an account on your project.
 5. **Local env.** Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Project Settings → API keys). Never use the secret / service-role key.
@@ -26,10 +26,11 @@ These need your accounts. Nothing here costs money.
 | `npm run build` | Production build |
 | `npm run typecheck` | Route type generation + `tsc` |
 | `npm run lint` | ESLint |
+| `npm run test:logic` | Unit tests: capture parsing, recurrence, timetable expansion, load checks, habit streaks, .ics import, wake plan, timezones |
 | `npm run test:db` | Applies all migrations to an in-memory Postgres 17 (PGlite) and checks RLS isolation and constraints |
 | `npm run check` | All of the above except build |
 
-Dev only: `/design` (component gallery) and `/design/today` (Today rendered from a labelled fixture for layout review). Both 404 in production.
+Dev only: `/design` (component gallery), `/design/today` and `/design/planner` (rendered from labelled fixtures for layout review). All 404 in production.
 
 ## Security model
 

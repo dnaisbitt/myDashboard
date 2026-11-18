@@ -3,14 +3,27 @@
 import { Plus, Search, Settings, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 import { cn } from "@/lib/cn";
 import { Kbd } from "@/components/ui/misc";
 import { isActive, NAV } from "./nav";
 import { useShell } from "./shell-context";
 import { Wordmark } from "./wordmark";
 
+/** The current path is request-time data; render without a highlight until it streams in. */
 export function Sidebar() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<SidebarInner pathname="" />}>
+      <SidebarLive />
+    </Suspense>
+  );
+}
+
+function SidebarLive() {
+  return <SidebarInner pathname={usePathname()} />;
+}
+
+function SidebarInner({ pathname }: { pathname: string }) {
   const { openCapture, openSearch, openAssistant, viewer } = useShell();
 
   return (
@@ -44,7 +57,7 @@ export function Sidebar() {
 
       <nav aria-label="Sections" className="mt-6 flex flex-col gap-px">
         {NAV.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = isActive(pathname, item.href, item.also);
           const Icon = item.icon;
           return (
             <Link

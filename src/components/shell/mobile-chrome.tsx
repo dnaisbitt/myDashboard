@@ -3,7 +3,7 @@
 import { Check, House, Inbox, Menu, Plus, Search, Settings, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Dialog } from "@/components/ui/dialog";
 import { IconButton } from "@/components/ui/button";
@@ -13,9 +13,20 @@ import { Wordmark } from "./wordmark";
 
 /** Phone top bar: wordmark, search, menu (all sections + settings). Deliberately small. */
 export function MobileTopBar() {
+  return (
+    <Suspense fallback={<MobileTopBarInner pathname="" />}>
+      <MobileTopBarLive />
+    </Suspense>
+  );
+}
+
+function MobileTopBarLive() {
+  return <MobileTopBarInner pathname={usePathname()} />;
+}
+
+function MobileTopBarInner({ pathname }: { pathname: string }) {
   const { openSearch, openAssistant } = useShell();
   const [menuOpen, setMenuOpen] = useState(false);
-  const pathname = usePathname();
 
   return (
     <>
@@ -35,7 +46,7 @@ export function MobileTopBar() {
         <nav aria-label="All sections" className="-mx-2 flex flex-col">
           {NAV.map((item) => {
             const Icon = item.icon;
-            const active = isActive(pathname, item.href);
+            const active = isActive(pathname, item.href, item.also);
             return (
               <Link
                 key={item.href}
@@ -81,7 +92,18 @@ export function MobileTopBar() {
 
 /** Phone bottom bar: four items. Capture sits in the thumb zone. */
 export function MobileBottomBar() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<MobileBottomBarInner pathname="" />}>
+      <MobileBottomBarLive />
+    </Suspense>
+  );
+}
+
+function MobileBottomBarLive() {
+  return <MobileBottomBarInner pathname={usePathname()} />;
+}
+
+function MobileBottomBarInner({ pathname }: { pathname: string }) {
   const { openCapture, openLog } = useShell();
 
   const tab = (active: boolean) =>

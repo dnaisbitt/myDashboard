@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { PageFrame, PageHeader } from "@/components/shell/page-header";
 import { InboxList } from "@/components/tasks/inbox-list";
 import { ListSkeleton } from "@/components/tasks/list-skeleton";
-import { Planned } from "@/components/ui/misc";
+import { Decide } from "@/components/today/decide";
 import { getInbox } from "@/lib/data/tasks";
 
 export const metadata: Metadata = { title: "Inbox" };
@@ -13,20 +13,26 @@ export default function InboxPage() {
     <PageFrame>
       <PageHeader
         title="Inbox"
-        lede="Oldest first. Decide each one: do it today, give it a date, keep it as a task, or archive it."
+        lede="Oldest first. Decide each one: do it today, give it a date, keep it as a task, or archive it. Nothing is allowed to sit here forever."
       />
       <Suspense fallback={<ListSkeleton />}>
         <InboxContent />
       </Suspense>
-      <div className="mt-10 flex flex-wrap items-center gap-2 text-small text-ink-2">
-        <Planned phase="Phase 4" />
-        <span>Automatic resurfacing of old items, event detection (“dentist Tue 3pm”) and shopping-list routing.</span>
-      </div>
     </PageFrame>
   );
 }
 
 async function InboxContent() {
-  const { tasks, nowMs, tz } = await getInbox();
-  return <InboxList tasks={tasks} nowMs={nowMs} tz={tz} />;
+  const { tasks, stale, nowMs, tz } = await getInbox();
+  return (
+    <div className="flex flex-col gap-12">
+      <InboxList tasks={tasks} nowMs={nowMs} tz={tz} />
+      {stale.length ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-small text-ink-2">Open tasks with no date that haven&apos;t been touched in two weeks:</p>
+          <Decide items={stale} nowMs={nowMs} tz={tz} limit={20} />
+        </div>
+      ) : null}
+    </div>
+  );
 }

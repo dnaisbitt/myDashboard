@@ -120,6 +120,35 @@ proj.rows[0]?.goal_id === null && proj.rows[0]?.user_id === A
   : fail("on delete set null (goal_id)", JSON.stringify(proj.rows));
 await db.exec(reset);
 
+// --- Phase 4 tables ---------------------------------------------------------------
+await db.exec(asUser(A));
+await db.exec(`
+  insert into public.goals (id, title) values ('aaaaaaaa-0000-0000-0000-000000000009', 'Win BUCS');
+  insert into public.timetable_sessions (id, title, weekday, start_time, end_time, starts_on, ends_on)
+    values ('aaaaaaaa-0000-0000-0000-000000000010', 'ML lecture', 3, '09:00', '11:00', '2026-09-28', '2026-12-12');
+  insert into public.session_exceptions (session_id, on_date) values ('aaaaaaaa-0000-0000-0000-000000000010', '2026-11-18');
+  insert into public.habits (id, title, frequency, target_per_week, goal_id) values ('aaaaaaaa-0000-0000-0000-000000000011', 'Gym', 'weekly', 4, 'aaaaaaaa-0000-0000-0000-000000000009');
+  insert into public.habit_logs (habit_id, on_date) values ('aaaaaaaa-0000-0000-0000-000000000011', '2026-11-18');
+  insert into public.milestones (goal_id, title) values ('aaaaaaaa-0000-0000-0000-000000000009', 'Make the first team');
+  insert into public.goal_updates (goal_id, body, progress) values ('aaaaaaaa-0000-0000-0000-000000000009', 'Good week', 20);
+  update public.tasks set recurrence = '{"freq":"weekly","interval":1,"weekdays":[1]}', category = 'Uni' where title = 'P1';
+`);
+ok("owner can use timetable, exceptions, habits, logs, milestones, goal updates");
+await expectError("one log per habit per day", `insert into public.habit_logs (habit_id, on_date) values ('aaaaaaaa-0000-0000-0000-000000000011', '2026-11-18')`, /duplicate key/);
+await expectError("weekly habit needs a target", `insert into public.habits (title, frequency) values ('x', 'weekly')`, /check/);
+await expectError("milestone needs exactly one parent", `insert into public.milestones (title) values ('orphan')`, /check/);
+await expectError("bad recurrence rejected", `update public.tasks set recurrence = '{"freq":"hourly"}' where title = 'P1'`, /check/);
+await db.exec(reset);
+await db.exec(asUser(B));
+const leak = await db.query(`select (select count(*) from public.timetable_sessions)::int a, (select count(*) from public.habits)::int b, (select count(*) from public.habit_logs)::int c, (select count(*) from public.milestones)::int d, (select count(*) from public.goal_updates)::int e, (select count(*) from public.session_exceptions)::int f`);
+Object.values(leak.rows[0]).every((n) => n === 0) ? ok("phase 4 tables isolated between users") : fail("phase 4 isolation", JSON.stringify(leak.rows[0]));
+await expectError(
+  "cannot log against someone else's habit",
+  `insert into public.habit_logs (habit_id, on_date) values ('aaaaaaaa-0000-0000-0000-000000000011', '2026-11-19')`,
+  /foreign key/,
+);
+await db.exec(reset);
+
 await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
 await expectError("anonymous role has no table access", `select * from public.tasks`, /permission denied/);
 await db.exec(reset);

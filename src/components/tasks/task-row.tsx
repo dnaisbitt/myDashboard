@@ -6,7 +6,7 @@ import { TaskCheck } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { useShell } from "@/components/shell/shell-context";
 import { cn } from "@/lib/cn";
-import { describeDue } from "@/lib/time";
+import { describeDue, keyLabel } from "@/lib/time";
 import type { Task } from "@/lib/types";
 
 /** One task line: check, title (opens editor), due label, optional trailing actions. */
@@ -16,6 +16,7 @@ export function TaskRow({
   tz,
   leading,
   trailing,
+  meta,
   className,
 }: {
   task: Task;
@@ -23,6 +24,8 @@ export function TaskRow({
   tz: string;
   leading?: ReactNode;
   trailing?: ReactNode;
+  /** Small second line under the title (project, category, checklist…). */
+  meta?: ReactNode;
   className?: string;
 }) {
   const { openTask } = useShell();
@@ -40,7 +43,9 @@ export function TaskRow({
         notify(res.error, { tone: "error" });
         return;
       }
-      if (next) {
+      if (next && res.data?.nextDue) {
+        notify(`Done. Next one is due ${keyLabel(res.data.nextDue)}`);
+      } else if (next) {
         notify("Done", {
           action: {
             label: "Undo",
@@ -68,6 +73,7 @@ export function TaskRow({
         >
           {task.title}
         </span>
+        {meta ? <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-micro text-ink-2">{meta}</span> : null}
       </button>
       {due && !done ? (
         <span

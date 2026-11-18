@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:db": "node scripts/test-migrations.mjs",
     "typecheck": "next typegen && tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run test:db"
+    "check": "npm run typecheck && npm run lint && npm run test:logic && npm run test:db",
+    "test:logic": "tsx --test scripts/test-logic.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
@@ -34,6 +35,7 @@
     "eslint-config-next": "16.4.6",
     "playwright": "^1.65.1",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

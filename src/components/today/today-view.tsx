@@ -1,7 +1,10 @@
 import type { TodayData } from "@/lib/data/today";
+import { counts, isScheduled } from "@/lib/habits";
 import { describeDue } from "@/lib/time";
 import { Briefing } from "./briefing";
 import { Deadlines } from "./deadlines";
+import { Decide } from "./decide";
+import { HabitsToday } from "./habits-today";
 import { Priorities } from "./priorities";
 import { ProgressStrip } from "./progress-strip";
 import { Schedule } from "./schedule";
@@ -16,7 +19,10 @@ export function summarise(d: TodayData): string[] {
   const next = infos.find((x) => !x.info.overdue);
   if (overdue.length) out.push(`${overdue.length} overdue.`);
   if (next) out.push(`${next.t.title}, ${next.info.label.replace(" · ", ", ")}.`);
+  const cancelled = d.blocks.filter((b) => b.cancelled);
+  if (cancelled.length) out.push(`${cancelled.map((b) => b.title).join(", ")} cancelled today.`);
   if (d.priorities.length === 0) out.push("No priorities picked yet.");
+  if (d.quietGoals[0]) out.push(`“${d.quietGoals[0].title}” hasn't moved in ${d.quietGoals[0].quietDays} days.`);
   if (d.inboxCount) out.push(`${d.inboxCount} waiting in your Inbox.`);
   return out;
 }
@@ -24,7 +30,9 @@ export function summarise(d: TodayData): string[] {
 export function TodayView({ data, ai }: { data: TodayData; ai: { ready: boolean; message: string } }) {
   const tz = data.profile.timezone;
   // The highlighter is spent once: on the current or next block, else on priority #1.
-  const hasUpcomingBlock = data.events.some((e) => new Date(e.ends_at).getTime() > data.nowMs);
+  const hasUpcomingBlock = data.blocks.some((b) => !b.cancelled && Date.parse(b.endsAt) > data.nowMs);
+  const habitsDue = data.habits.filter((h) => isScheduled(h, data.todayKey));
+  const habitsDone = habitsDue.filter((h) => counts(data.habitLogs.find((l) => l.habit_id === h.id && l.on_date === data.todayKey))).length;
 
   return (
     <div className="mx-auto w-full max-w-[1120px] px-5 pt-6 sm:px-8 lg:px-12 lg:pt-14">
@@ -40,12 +48,14 @@ export function TodayView({ data, ai }: { data: TodayData; ai: { ready: boolean;
             tz={tz}
             marked={!hasUpcomingBlock}
           />
-          <Schedule events={data.events} nowMs={data.nowMs} tz={tz} todayKey={data.todayKey} marked={hasUpcomingBlock} />
+          <Schedule blocks={data.blocks} nowMs={data.nowMs} tz={tz} todayKey={data.todayKey} marked={hasUpcomingBlock} />
         </div>
         <div className="flex min-w-0 flex-col gap-12">
           <Deadlines deadlines={data.deadlines} nowMs={data.nowMs} tz={tz} todayKey={data.todayKey} />
-          {/* Phone stays deliberately small: the briefing and strip are laptop-only. */}
-          <div className="hidden lg:block">
+          <HabitsToday habits={data.habits} logs={data.habitLogs} todayKey={data.todayKey} />
+          {/* Phone stays deliberately small: decisions, briefing and the strip are laptop-only. */}
+          <div className="hidden flex-col gap-12 lg:flex">
+            <Decide items={data.decisions} nowMs={data.nowMs} tz={tz} />
             <Briefing ready={ai.ready} message={ai.message} />
           </div>
         </div>
@@ -56,7 +66,11 @@ export function TodayView({ data, ai }: { data: TodayData; ai: { ready: boolean;
         doneToday={data.doneToday}
         doneThisWeek={data.doneThisWeek}
         activeGoals={data.activeGoals}
+        quietGoals={data.quietGoals.length}
+        habitsDone={habitsDone}
+        habitsDue={habitsDue.length}
         activeProjects={data.activeProjects}
+        projectsNeedingAttention={data.projectsNeedingAttention}
       />
     </div>
   );

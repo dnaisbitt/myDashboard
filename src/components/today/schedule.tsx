@@ -1,13 +1,17 @@
 "use client";
 
 import { MapPin, Plus } from "lucide-react";
-import { useState } from "react";
+import Link from "next/link";
+import { useState, useTransition } from "react";
+import { setFocusOutcome } from "@/app/actions/events";
 import { Button } from "@/components/ui/button";
 import { EmptyState, SectionHeader } from "@/components/ui/misc";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
+import type { Block } from "@/lib/schedule";
 import { durationLabel, formatTime, localMinutes } from "@/lib/time";
-import { EVENT_KIND_LABEL, type CalendarEvent } from "@/lib/types";
-import { EventDialog, type EventDraft } from "./event-dialog";
+import { EVENT_KIND_LABEL, PLACE_LABEL, SESSION_KIND_LABEL, type FocusOutcome } from "@/lib/types";
+import { EventDialog, SessionDialog, type EventDraft } from "./event-dialog";
 import { useMinuteClock } from "./today-header";
 
 const DRIFT_START = 10 * 60;
@@ -15,7 +19,7 @@ const DRIFT_END = 16 * 60;
 const MIN_GAP = 45;
 
 type Row =
-  | { type: "event"; event: CalendarEvent; state: "past" | "now" | "next" | "later" }
+  | { type: "block"; block: Block; state: "past" | "now" | "next" | "later" }
   | { type: "now"; at: number }
   | { type: "gap"; from: number; to: number; drift: boolean };
 
@@ -23,22 +27,25 @@ function hhmm(mins: number) {
   return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }
 
-/** Turns today's blocks into an agenda with a "now" line and the open gaps worth using. */
-export function buildRows(events: CalendarEvent[], nowMs: number, tz: string): Row[] {
+const kindLabel = (k: string) =>
+  (EVENT_KIND_LABEL as Record<string, string>)[k] ?? (SESSION_KIND_LABEL as Record<string, string>)[k] ?? k;
+
+/** Today's blocks as an agenda with a "now" line and the open gaps worth using. */
+export function buildRows(blocks: Block[], nowMs: number, tz: string): Row[] {
   const nowMin = localMinutes(nowMs, tz);
   const rows: Row[] = [];
   let nowPlaced = false;
   let nextAssigned = false;
-  let cursor = nowMin; // gaps only matter from now on
+  let cursor = nowMin;
 
-  for (const event of events) {
-    const s = new Date(event.starts_at).getTime();
-    const e = new Date(event.ends_at).getTime();
-    const startMin = localMinutes(event.starts_at, tz);
+  for (const block of blocks) {
+    const s = Date.parse(block.startsAt);
+    const e = Date.parse(block.endsAt);
+    const startMin = localMinutes(block.startsAt, tz);
     let state: "past" | "now" | "next" | "later";
     if (e <= nowMs) state = "past";
     else if (s <= nowMs) state = "now";
-    else if (!nextAssigned) state = "next";
+    else if (!nextAssigned && !block.cancelled) state = "next";
     else state = "later";
 
     if (!nowPlaced && (state === "next" || state === "later")) {
@@ -47,53 +54,48 @@ export function buildRows(events: CalendarEvent[], nowMs: number, tz: string): R
     }
     if (state === "now") nowPlaced = true;
 
-    if (state === "next" || state === "later") {
-      if (startMin - cursor >= MIN_GAP) {
-        rows.push({
-          type: "gap",
-          from: cursor,
-          to: startMin,
-          drift: cursor < DRIFT_END && startMin > DRIFT_START,
-        });
-      }
+    if ((state === "next" || state === "later") && !block.cancelled && startMin - cursor >= MIN_GAP) {
+      rows.push({ type: "gap", from: cursor, to: startMin, drift: cursor < DRIFT_END && startMin > DRIFT_START });
     }
     if (state === "next") nextAssigned = true;
-    rows.push({ type: "event", event, state });
-    if (state !== "past") {
-      const endMin = localMinutes(event.ends_at, tz);
+    rows.push({ type: "block", block, state });
+    if (state !== "past" && !block.cancelled) {
+      const endMin = localMinutes(block.endsAt, tz);
       cursor = Math.max(cursor, endMin < startMin ? 24 * 60 : endMin);
     }
   }
-  if (!nowPlaced && events.length) rows.push({ type: "now", at: nowMin });
+  if (!nowPlaced && blocks.length) rows.push({ type: "now", at: nowMin });
   return rows;
 }
 
 export function Schedule({
-  events,
+  blocks,
   nowMs: initialNow,
   tz,
   todayKey,
   marked,
 }: {
-  events: CalendarEvent[];
+  blocks: Block[];
   nowMs: number;
   tz: string;
   todayKey: string;
-  /** Whether the highlighter is spent on the current/next block. */
   marked: boolean;
 }) {
   const nowMs = useMinuteClock(initialNow);
   const [draft, setDraft] = useState<EventDraft | null>(null);
-  const rows = buildRows(events, nowMs, tz);
-  const hasNow = rows.some((r) => r.type === "event" && r.state === "now");
-  const remaining = events.filter((e) => new Date(e.ends_at).getTime() > nowMs).length;
+  const [session, setSession] = useState<Block | null>(null);
+  const rows = buildRows(blocks, nowMs, tz);
+  const live = blocks.filter((b) => !b.cancelled);
+  const hasNow = rows.some((r) => r.type === "block" && r.state === "now" && !r.block.cancelled);
+  const remaining = live.filter((b) => Date.parse(b.endsAt) > nowMs).length;
+  const open = (b: Block) => (b.source === "session" ? setSession(b) : setDraft({ event: b.event, dayKey: todayKey }));
 
   return (
     <section aria-labelledby="schedule-title" className="flex flex-col gap-2">
       <SectionHeader
         id="schedule-title"
         title="Schedule"
-        count={events.length ? `${remaining} left` : undefined}
+        count={live.length ? `${remaining} left` : undefined}
         action={
           <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setDraft({ dayKey: todayKey })}>
             <Plus size={14} aria-hidden />
@@ -102,10 +104,18 @@ export function Schedule({
         }
       />
 
-      {events.length === 0 ? (
+      {blocks.length === 0 ? (
         <EmptyState
           title="Nothing scheduled today"
-          body="Your weekly lecture timetable is coming in Phase 4. For now you can add one-off blocks: a 60-minute focus block, training, an appointment."
+          body={
+            <>
+              Add your weekly lectures once in{" "}
+              <Link href="/planner/timetable" className="underline underline-offset-4 hover:text-ink">
+                Timetable
+              </Link>
+              , or add a one-off block: a 60-minute focus block, training, an appointment.
+            </>
+          }
           action={
             <Button size="sm" onClick={() => setDraft({ dayKey: todayKey })}>
               <Plus size={14} aria-hidden />
@@ -127,59 +137,61 @@ export function Schedule({
             }
             if (row.type === "gap") {
               const mins = row.to - row.from;
+              const start = Math.ceil(row.from / 15) * 15;
               return (
                 <li key={`gap-${i}`} className="flex items-center gap-3 py-1">
                   <span className="w-[92px] shrink-0 text-small text-ink-3">{hhmm(row.from)}</span>
                   <button
                     type="button"
                     onClick={() =>
-                      setDraft({
-                        dayKey: todayKey,
-                        start: hhmm(Math.ceil(row.from / 15) * 15),
-                        end: hhmm(Math.min(Math.ceil(row.from / 15) * 15 + 60, row.to)),
-                      })
+                      setDraft({ dayKey: todayKey, start: hhmm(start), end: hhmm(Math.min(start + (row.drift ? 30 : 60), row.to)), kind: "focus" })
                     }
                     className="flex-1 rounded-sm border border-dashed border-rule px-3 py-1.5 text-left text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
                   >
                     {durationLabel(mins)} open
-                    {row.drift ? " · drift window, give it one small, specific task" : ""}
+                    {row.drift ? " · drift window, give it one small, specific task" : row.from >= 18 * 60 ? " · evening peak, good for hard coursework" : ""}
                   </button>
                 </li>
               );
             }
-            const { event, state } = row;
-            const highlight = marked && (state === "now" || (state === "next" && !hasNow));
+            const { block, state } = row;
+            const highlight = marked && !block.cancelled && (state === "now" || (state === "next" && !hasNow));
+            const needsAnswer = block.kind === "focus" && state === "past" && block.event && !block.event.outcome;
             return (
-              <li key={event.id}>
+              <li key={block.key}>
                 <button
                   type="button"
-                  onClick={() => setDraft({ event, dayKey: todayKey })}
+                  onClick={() => open(block)}
                   className={cn(
                     "flex w-full items-start gap-3 rounded-sm py-2 text-left transition-colors hover:bg-sunken/60",
-                    state === "past" && "text-ink-3",
+                    (state === "past" || block.cancelled) && "text-ink-3",
                   )}
                 >
                   <span className="relative isolate w-[92px] shrink-0 pt-px text-small">
                     {highlight ? (
                       <span aria-hidden className="absolute -inset-x-1.5 -inset-y-0.5 -z-10 origin-left animate-sweep rounded-[3px] bg-mark" />
                     ) : null}
-                    <span className={cn(highlight ? "font-medium text-mark-ink" : state === "past" ? "" : "text-ink-2")}>
-                      {formatTime(event.starts_at, tz)}–{formatTime(event.ends_at, tz)}
+                    <span className={cn(highlight ? "font-medium text-mark-ink" : state === "past" || block.cancelled ? "" : "text-ink-2")}>
+                      {formatTime(block.startsAt, tz)}–{formatTime(block.endsAt, tz)}
                     </span>
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className={cn("block truncate", state !== "past" && "font-medium")}>{event.title}</span>
+                    <span className={cn("block truncate", state !== "past" && !block.cancelled && "font-medium", block.cancelled && "line-through")}>
+                      {block.title}
+                    </span>
                     <span className="flex flex-wrap items-center gap-x-2 text-small text-ink-2">
-                      <span>{state === "now" ? "Now" : EVENT_KIND_LABEL[event.kind]}</span>
-                      {event.location ? (
+                      <span>{block.cancelled ? "Cancelled this week" : state === "now" ? "Now" : kindLabel(block.kind)}</span>
+                      {block.event?.place ? <span>{PLACE_LABEL[block.event.place]}</span> : null}
+                      {block.location ? (
                         <span className="inline-flex items-center gap-1">
                           <MapPin size={12} aria-hidden />
-                          {event.location}
+                          {block.location}
                         </span>
                       ) : null}
                     </span>
                   </span>
                 </button>
+                {needsAnswer ? <FocusCheck id={block.event!.id} /> : null}
               </li>
             );
           })}
@@ -187,6 +199,40 @@ export function Schedule({
       )}
 
       <EventDialog draft={draft} onClose={() => setDraft(null)} tz={tz} />
+      <SessionDialog block={session} onClose={() => setSession(null)} tz={tz} />
     </section>
+  );
+}
+
+/** End-of-block self-report. Honest answers feed "Where you focus best". */
+function FocusCheck({ id }: { id: string }) {
+  const [pending, start] = useTransition();
+  const { notify } = useToast();
+  const answer = (o: FocusOutcome) =>
+    start(async () => {
+      const r = await setFocusOutcome(id, o);
+      notify(r.ok ? "Noted" : r.error, { tone: r.ok ? "ok" : "error" });
+    });
+  return (
+    <div className="mb-2 ml-[104px] flex flex-wrap items-center gap-2 text-small">
+      <span className="text-ink-2">Did you stay on it?</span>
+      {(
+        [
+          ["stayed", "Yes"],
+          ["partly", "Partly"],
+          ["drifted", "Drifted"],
+        ] as const
+      ).map(([o, l]) => (
+        <button
+          key={o}
+          type="button"
+          disabled={pending}
+          onClick={() => answer(o)}
+          className="h-7 rounded-full border border-rule px-3 text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+        >
+          {l}
+        </button>
+      ))}
+    </div>
   );
 }

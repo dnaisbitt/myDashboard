@@ -128,3 +128,54 @@ export function durationLabel(mins: number) {
   const m = mins % 60;
   return m ? `${h}h ${m}m` : `${h}h`;
 }
+
+// ---------------------------------------------------------------------------
+// Calendar-key helpers (pure: keys are already local dates)
+// ---------------------------------------------------------------------------
+
+/** ISO weekday for a date key: Mon = 1 … Sun = 7. */
+export function isoWeekday(key: string) {
+  const d = new Date(`${key}T12:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
+/** Monday of the week containing key. */
+export function weekStartKey(key: string) {
+  return addDaysToKey(key, 1 - isoWeekday(key));
+}
+
+export function monthStartKey(key: string) {
+  return `${key.slice(0, 7)}-01`;
+}
+
+/** Same day n months on, clamped to the month's length (31 Jan + 1 → 28/29 Feb). */
+export function addMonthsToKey(key: string, n: number) {
+  const [y, m, d] = key.split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d, last));
+  return target.toISOString().slice(0, 10);
+}
+
+/** "09:00:00" | "09:00" → minutes since midnight. */
+export function timeToMinutes(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+export function minutesToTime(mins: number) {
+  const m = ((mins % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** "Mon 23 Nov" style label from a key (no zone needed). */
+export function keyLabel(
+  key: string,
+  opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" },
+) {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", ...opts }).format(new Date(`${key}T12:00:00Z`));
+}
+
+export function isValidKey(key: string | undefined | null): key is string {
+  return Boolean(key && /^\d{4}-\d{2}-\d{2}$/.test(key) && !Number.isNaN(Date.parse(`${key}T00:00:00Z`)));
+}

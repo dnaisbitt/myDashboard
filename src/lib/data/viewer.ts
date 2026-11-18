@@ -2,8 +2,8 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_TZ } from "@/lib/time";
-import type { Profile } from "@/lib/types";
+import { dateKey, DEFAULT_TZ } from "@/lib/time";
+import { PROFILE_COLUMNS, type Profile } from "@/lib/types";
 
 /**
  * Data Access Layer entry point. Verifies the session (JWT signature checked by
@@ -26,7 +26,7 @@ export async function getActionViewer() {
   return { supabase, userId };
 }
 
-const PROFILE_COLUMNS = "id,display_name,timezone,tone,trackers,ai_enabled";
+
 
 export const getProfile = cache(async (): Promise<Profile> => {
   const { supabase, userId } = await getViewer();
@@ -47,4 +47,11 @@ export const getProfile = cache(async (): Promise<Profile> => {
 export async function getTimezone() {
   const p = await getProfile();
   return p.timezone || DEFAULT_TZ;
+}
+
+/** The request's "now" in the user's zone. Read once per request in the data layer. */
+export async function getClock() {
+  const profile = await getProfile();
+  const nowMs = Date.now();
+  return { nowMs, tz: profile.timezone, todayKey: dateKey(nowMs, profile.timezone), profile };
 }

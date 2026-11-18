@@ -7,12 +7,16 @@ const base = process.argv[2] ?? "http://localhost:3100";
 const out = process.argv[3] ?? "screenshots";
 mkdirSync(out, { recursive: true });
 
+const only = process.argv[4]?.split(",");
 const targets = [
   ["today", "/design/today"],
   ["today-empty", "/design/today?empty"],
+  ["planner-week", "/design/planner"],
+  ["planner-day", "/design/planner?view=day"],
+  ["planner-month", "/design/planner?view=month"],
   ["design", "/design"],
   ["login", "/login"],
-];
+].filter(([n]) => !only || only.includes(n));
 const devices = [
   ["laptop", { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
   // Pixel 7 CSS viewport

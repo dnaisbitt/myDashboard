@@ -25,6 +25,11 @@ const profileSchema = z.object({
   tone: z.object({ habits: tone, wake: tone, deadlines: tone, exams: tone, optional: tone }).optional(),
   trackers: z.object({ calories: z.boolean(), protein: z.boolean(), lifts: z.boolean() }).optional(),
   ai_enabled: z.boolean().optional(),
+  // Gradual wake-time plan
+  wake_current: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  wake_target: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  wake_step_minutes: z.number().int().min(5).max(30).optional(),
+  wake_plan_started: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 
 export async function updateProfile(input: z.input<typeof profileSchema>): Promise<ActionResult> {
