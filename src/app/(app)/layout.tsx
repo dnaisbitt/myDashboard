@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { Suspense } from "react";
 import { AppShell, ViewerSync } from "@/components/shell/app-shell";
 import { SetupNotice } from "@/components/shell/setup-notice";
@@ -25,7 +26,16 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 }
 
 async function ViewerBridge() {
-  const profile = await getProfile();
+  // A failure here must not take down the whole layout: the page below has its
+  // own error boundary that shows the real reason. Keep the shell's defaults.
+  let profile;
+  try {
+    profile = await getProfile();
+  } catch (e) {
+    unstable_rethrow(e); // let redirects (e.g. to /login) and dynamic-render signals through
+    console.error("ViewerBridge:", e);
+    return null;
+  }
   const status = resolveAiStatus(profile.ai_enabled);
   return (
     <ViewerSync
