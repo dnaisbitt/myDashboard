@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { formatGBP } from "@/lib/money";
 
 type Metric = { label: string; href?: string; value?: string; detail?: string; alert?: string; phase?: string };
 
@@ -13,6 +14,8 @@ export function ProgressStrip({
   habitsDue,
   activeProjects,
   projectsNeedingAttention,
+  money,
+  gym,
   className,
 }: {
   doneToday: number;
@@ -23,6 +26,8 @@ export function ProgressStrip({
   habitsDue: number;
   activeProjects: number;
   projectsNeedingAttention: number;
+  money: { leftThisWeek: number; allowancePerWeek: number } | null;
+  gym: { done: number; target: number };
   className?: string;
 }) {
   const metrics: Metric[] = [
@@ -42,8 +47,16 @@ export function ProgressStrip({
       detail: "active",
       alert: projectsNeedingAttention ? `${projectsNeedingAttention} need attention` : undefined,
     },
-    { label: "Money", phase: "Phase 5" },
-    { label: "Body", phase: "Phase 5" },
+    money
+      ? {
+          label: "Money",
+          href: "/money",
+          value: formatGBP(Math.abs(money.leftThisWeek), { whole: true }),
+          detail: money.leftThisWeek < 0 ? "over this week" : "left this week",
+          alert: money.leftThisWeek < 0 ? `allowance ${formatGBP(money.allowancePerWeek, { whole: true })}` : undefined,
+        }
+      : { label: "Money", href: "/money", value: "–", detail: "set up your term" },
+    { label: "Gym", href: "/body", value: `${gym.done}/${gym.target}`, detail: "this week" },
   ];
 
   return (

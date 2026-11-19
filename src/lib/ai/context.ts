@@ -2,6 +2,7 @@ import "server-only";
 import { getGoals, getProjects } from "@/lib/data/plans";
 import { getTodayData } from "@/lib/data/today";
 import { habitStats, isScheduled } from "@/lib/habits";
+import { formatGBP } from "@/lib/money";
 import { describeDue, formatTime } from "@/lib/time";
 
 /**
@@ -20,6 +21,9 @@ export type AssistantContext = {
   goals: Array<{ title: string; horizon: string; progress: number; target: string | null; deadline: string | null; quietDays: number; milestonesDone: string }>;
   projects: Array<{ title: string; status: string; health: string; reason: string; openTasks: number; deadline: string | null; goal: string | null }>;
   waitingForDecision: string[];
+  money: { leftThisWeek: string; weeklyAllowance: string } | null;
+  gymThisWeek: string;
+  meals: { lunch: string | null; dinner: string | null };
   counts: { inbox: number; doneToday: number; doneThisWeek: number };
   notTracked: string[];
 };
@@ -77,8 +81,15 @@ export async function buildAssistantContext(): Promise<AssistantContext> {
         goal: p.goalTitle,
       })),
     waitingForDecision: d.decisions.map((t) => t.title),
+    money: d.money ? { leftThisWeek: formatGBP(d.money.leftThisWeek), weeklyAllowance: formatGBP(d.money.allowancePerWeek) } : null,
+    gymThisWeek: `${d.gym.done}/${d.gym.target}`,
+    meals: d.meals,
     counts: { inbox: d.inboxCount, doneToday: d.doneToday, doneThisWeek: d.doneThisWeek },
-    notTracked: ["money and budget (Phase 5)", "gym sessions, sleep and food logs (Phase 5)", "how reminders were acted on (Phase 7)"],
+    notTracked: [
+      "individual transactions and sleep nights (summaries only)",
+      "how reminders were acted on (Phase 7)",
+      "anything in your bank, phone, email, MyLboro or the gym booking system",
+    ],
   };
 }
 

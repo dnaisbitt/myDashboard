@@ -5,7 +5,7 @@ import { z } from "zod";
 import { dateKeySchema, fail, firstIssue, NOT_SIGNED_IN, uuid } from "@/lib/data/action-utils";
 import { getActionViewer } from "@/lib/data/viewer";
 import { addDaysToKey, dateKey, DEFAULT_TZ } from "@/lib/time";
-import { HABIT_COLUMNS, type ActionResult, type Habit, type HabitLog } from "@/lib/types";
+import { HABIT_COLUMNS, PROFILE_COLUMNS, type ActionResult, type Habit, type HabitLog, type Profile } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Goals
@@ -267,17 +267,42 @@ export async function addStarterHabits(keys: string[]): Promise<ActionResult<{ a
   return { ok: true, data: { added: rows.length } };
 }
 
-/** For the phone's Log sheet: today's habits plus enough history for streaks. */
-export async function getLogSheetData(): Promise<ActionResult<{ habits: Habit[]; logs: HabitLog[]; todayKey: string }>> {
+/** For the phone's Log sheet: habits with streak history, plus today's body check-ins. */
+export async function getLogSheetData(): Promise<
+  ActionResult<{
+    habits: Habit[];
+    logs: HabitLog[];
+    todayKey: string;
+    profile: Profile;
+    workout: "full" | "minimum" | null;
+    checkin: { on_date: string; ate_well: boolean | null; protein_hit: boolean | null; calories: number | null } | null;
+    categories: string[];
+  }>
+> {
   const v = await getActionViewer();
   if (!v) return NOT_SIGNED_IN;
-  const { data: profile } = await v.supabase.from("profiles").select("timezone").eq("id", v.userId).maybeSingle();
-  const todayKey = dateKey(Date.now(), (profile?.timezone as string | undefined) ?? DEFAULT_TZ);
-  const [habits, logs] = await Promise.all([
+  const { data: profile, error: pErr } = await v.supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", v.userId).maybeSingle();
+  if (pErr || !profile) return fail("Couldn't load your profile.", pErr);
+  const todayKey = dateKey(Date.now(), (profile.timezone as string | undefined) ?? DEFAULT_TZ);
+  const [habits, logs, workout, checkin, recent] = await Promise.all([
     v.supabase.from("habits").select(HABIT_COLUMNS).is("archived_at", null).order("position"),
     v.supabase.from("habit_logs").select("habit_id,on_date,status").gte("on_date", addDaysToKey(todayKey, -70)),
+    v.supabase.from("workouts").select("kind").eq("on_date", todayKey).maybeSingle(),
+    v.supabase.from("daily_checkins").select("on_date,ate_well,protein_hit,calories").eq("on_date", todayKey).maybeSingle(),
+    v.supabase.from("transactions").select("category").gt("amount_pence", 0).order("created_at", { ascending: false }).limit(30),
   ]);
-  const err = habits.error ?? logs.error;
-  if (err) return fail("Couldn't load your habits.", err);
-  return { ok: true, data: { habits: (habits.data ?? []) as Habit[], logs: (logs.data ?? []) as HabitLog[], todayKey } };
+  const err = habits.error ?? logs.error ?? workout.error ?? checkin.error ?? recent.error;
+  if (err) return fail("Couldn't load your logs.", err);
+  return {
+    ok: true,
+    data: {
+      habits: (habits.data ?? []) as Habit[],
+      logs: (logs.data ?? []) as HabitLog[],
+      todayKey,
+      profile: profile as Profile,
+      workout: (workout.data?.kind as "full" | "minimum" | undefined) ?? null,
+      checkin: checkin.data ?? null,
+      categories: [...new Set((recent.data ?? []).map((r) => r.category as string))].slice(0, 4),
+    },
+  };
 }

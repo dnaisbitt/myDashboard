@@ -14,6 +14,10 @@ const targets = [
   ["planner-week", "/design/planner"],
   ["planner-day", "/design/planner?view=day"],
   ["planner-month", "/design/planner?view=month"],
+  ["money", "/design/life?view=money"],
+  ["training", "/design/life?view=training"],
+  ["sleep", "/design/life?view=sleep"],
+  ["meals", "/design/life?view=meals"],
   ["design", "/design"],
   ["login", "/login"],
 ].filter(([n]) => !only || only.includes(n));

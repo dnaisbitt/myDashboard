@@ -10,7 +10,7 @@ const sessionSchema = z
   .object({
     id: uuid.optional(),
     title: z.string().trim().min(1, "Give it a name.").max(120),
-    kind: z.enum(["lecture", "lab", "seminar", "tutorial", "training", "match", "other"]),
+    kind: z.enum(["lecture", "lab", "seminar", "tutorial", "training", "match", "gym", "other"]),
     weekday: z.number().int().min(1).max(7),
     startTime: timeSchema,
     endTime: timeSchema,

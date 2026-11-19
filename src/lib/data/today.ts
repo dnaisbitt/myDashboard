@@ -13,6 +13,8 @@ import {
   type Task,
   type TimetableSession,
 } from "@/lib/types";
+import { computeBudget } from "@/lib/money";
+import { getMoney } from "./life";
 import { getDecisionQueue, getGoals, getProjects } from "./plans";
 import { getProfile, getViewer } from "./viewer";
 
@@ -35,6 +37,9 @@ export type TodayData = {
   quietGoals: Array<{ id: string; title: string; quietDays: number }>;
   activeProjects: number;
   projectsNeedingAttention: number;
+  money: { leftThisWeek: number; allowancePerWeek: number } | null;
+  gym: { done: number; target: number; today: "full" | "minimum" | null };
+  meals: { dinner: string | null; lunch: string | null };
 };
 
 /** Everything the Today page shows, from real rows only. */
@@ -88,7 +93,19 @@ export async function getTodayData(): Promise<TodayData> {
   )?.error;
   if (firstError) throw new Error(`Could not load today: ${firstError.message}`);
 
-  const [decisions, goals, projects] = await Promise.all([getDecisionQueue(3), getGoals(), getProjects()]);
+  const [decisions, goals, projects, money, workouts, meals] = await Promise.all([
+    getDecisionQueue(3),
+    getGoals(),
+    getProjects(),
+    getMoney(),
+    supabase.from("workouts").select("on_date,kind").gte("on_date", weekStartKey(todayKey)),
+    supabase.from("meal_plan").select("on_date,recipe_id,note,recipes(title,portions)").in("on_date", [addDaysToKey(todayKey, -1), todayKey]),
+  ]);
+  const budget = money.period ? computeBudget(money.period, money.items, money.txns, todayKey) : null;
+  type MealRow = { on_date: string; note: string | null; recipes: { title: string; portions: number } | null };
+  const mealRows = (meals.data ?? []) as unknown as MealRow[];
+  const tonight = mealRows.find((m) => m.on_date === todayKey);
+  const lastNight = mealRows.find((m) => m.on_date !== todayKey);
   const activeGoals = goals.filter((g) => g.status === "active");
 
   return {
@@ -116,5 +133,15 @@ export async function getTodayData(): Promise<TodayData> {
       .map((g) => ({ id: g.id, title: g.title, quietDays: g.quietDays })),
     activeProjects: projects.filter((p) => p.status === "active" || p.status === "exploring").length,
     projectsNeedingAttention: projects.filter((p) => p.health === "attention" || p.health === "delayed").length,
+    money: budget ? { leftThisWeek: budget.leftThisWeek, allowancePerWeek: budget.allowancePerWeek } : null,
+    gym: {
+      done: (workouts.data ?? []).length,
+      target: profile.gym_target_per_week,
+      today: ((workouts.data ?? []).find((w) => w.on_date === todayKey)?.kind as "full" | "minimum" | undefined) ?? null,
+    },
+    meals: {
+      dinner: tonight ? (tonight.recipes?.title ?? tonight.note) : null,
+      lunch: lastNight?.recipes && lastNight.recipes.portions >= 2 ? `Leftover ${lastNight.recipes.title}` : null,
+    },
   };
 }

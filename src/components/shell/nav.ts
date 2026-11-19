@@ -18,8 +18,8 @@ export const NAV: NavItem[] = [
   { href: "/tasks", label: "Tasks & Projects", icon: ListChecks, also: ["/projects"] },
   { href: "/planner", label: "Planner", icon: CalendarDays },
   { href: "/goals", label: "Goals & Habits", icon: Target, also: ["/habits"] },
-  { href: "/money", label: "Money", icon: Wallet, phase: "Phase 5" },
-  { href: "/body", label: "Body", icon: HeartPulse, phase: "Phase 5" },
+  { href: "/money", label: "Money", icon: Wallet },
+  { href: "/body", label: "Body", icon: HeartPulse },
 ];
 
 function matches(pathname: string, href: string) {

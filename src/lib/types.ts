@@ -15,10 +15,13 @@ export type Profile = {
   wake_target: string | null;
   wake_step_minutes: number;
   wake_plan_started: string | null;
+  bedtime_target: string | null;
+  gym_target_per_week: number;
+  gym_quiet_times: string | null;
 };
 
 export const PROFILE_COLUMNS =
-  "id,display_name,timezone,tone,trackers,ai_enabled,wake_current,wake_target,wake_step_minutes,wake_plan_started";
+  "id,display_name,timezone,tone,trackers,ai_enabled,wake_current,wake_target,wake_step_minutes,wake_plan_started,bedtime_target,gym_target_per_week,gym_quiet_times";
 
 export type TaskStatus = "inbox" | "open" | "done" | "archived";
 
@@ -75,7 +78,7 @@ export const PLACE_LABEL: Record<FocusPlace, string> = {
 
 export const EVENT_COLUMNS = "id,title,kind,starts_at,ends_at,location,notes,task_id,place,outcome";
 
-export type SessionKind = "lecture" | "lab" | "seminar" | "tutorial" | "training" | "match" | "other";
+export type SessionKind = "lecture" | "lab" | "seminar" | "tutorial" | "training" | "match" | "gym" | "other";
 export const SESSION_KIND_LABEL: Record<SessionKind, string> = {
   lecture: "Lecture",
   lab: "Lab",
@@ -83,6 +86,7 @@ export const SESSION_KIND_LABEL: Record<SessionKind, string> = {
   tutorial: "Tutorial",
   training: "Training",
   match: "Match",
+  gym: "Gym",
   other: "Other",
 };
 

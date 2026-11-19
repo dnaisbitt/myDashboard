@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { TodayData } from "@/lib/data/today";
 import { counts, isScheduled } from "@/lib/habits";
 import { describeDue } from "@/lib/time";
@@ -23,6 +24,7 @@ export function summarise(d: TodayData): string[] {
   if (cancelled.length) out.push(`${cancelled.map((b) => b.title).join(", ")} cancelled today.`);
   if (d.priorities.length === 0) out.push("No priorities picked yet.");
   if (d.quietGoals[0]) out.push(`“${d.quietGoals[0].title}” hasn't moved in ${d.quietGoals[0].quietDays} days.`);
+  if (d.money && d.money.leftThisWeek < 0) out.push(`Over this week's budget.`);
   if (d.inboxCount) out.push(`${d.inboxCount} waiting in your Inbox.`);
   return out;
 }
@@ -53,6 +55,15 @@ export function TodayView({ data, ai }: { data: TodayData; ai: { ready: boolean;
         <div className="flex min-w-0 flex-col gap-12">
           <Deadlines deadlines={data.deadlines} nowMs={data.nowMs} tz={tz} todayKey={data.todayKey} />
           <HabitsToday habits={data.habits} logs={data.habitLogs} todayKey={data.todayKey} />
+          {data.meals.dinner || data.meals.lunch ? (
+            <p className="-mt-6 text-small text-ink-2">
+              {data.meals.lunch ? <>Lunch: {data.meals.lunch.replace(/^Leftover /, "leftover ")}. </> : null}
+              {data.meals.dinner ? <>Tonight: {data.meals.dinner}.</> : null}{" "}
+              <Link href="/body/meals" className="underline underline-offset-4 hover:text-ink">
+                Meals
+              </Link>
+            </p>
+          ) : null}
           {/* Phone stays deliberately small: decisions, briefing and the strip are laptop-only. */}
           <div className="hidden flex-col gap-12 lg:flex">
             <Decide items={data.decisions} nowMs={data.nowMs} tz={tz} />
@@ -71,6 +82,8 @@ export function TodayView({ data, ai }: { data: TodayData; ai: { ready: boolean;
         habitsDue={habitsDue.length}
         activeProjects={data.activeProjects}
         projectsNeedingAttention={data.projectsNeedingAttention}
+        money={data.money}
+        gym={data.gym}
       />
     </div>
   );

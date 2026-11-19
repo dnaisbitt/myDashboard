@@ -197,3 +197,129 @@ test("wake plan: 15 minutes earlier each week until the target", () => {
   assert.equal(end.thisWeek, "07:30");
   assert.equal(end.done, true);
 });
+
+import { computeBudget, formatGBP, guessMapping, mapRows, occurrences, parseAmount, parseBankDate, parseCsv, weeklySpend } from "../src/lib/money";
+import { bedClock, bedMinutes, sleepChain, weekLoad } from "../src/lib/body";
+import { busyEvening, planWeek, shoppingFromPlan, type Recipe } from "../src/lib/meals";
+
+const term = { id: "p", title: "Term 1", starts_on: "2026-09-28", ends_on: "2026-12-13", opening_pence: 20000 };
+
+test("money: amounts and formatting", () => {
+  assert.equal(parseAmount("£4.50"), 450);
+  assert.equal(parseAmount("1,204"), 120400);
+  assert.equal(parseAmount("-3"), -300);
+  assert.equal(parseAmount("abc"), null);
+  assert.equal(formatGBP(450), "£4.50");
+  assert.equal(formatGBP(120449, { whole: true }), "£1,204");
+});
+
+test("money: recurring occurrences", () => {
+  assert.deepEqual(occurrences({ cadence: "monthly", first_on: "2026-10-01", last_on: null }, "2026-09-28", "2026-12-13"), ["2026-10-01", "2026-11-01", "2026-12-01"]);
+  assert.equal(occurrences({ cadence: "weekly", first_on: "2026-09-28", last_on: null }, "2026-09-28", "2026-12-13").length, 11);
+});
+
+test("money: weekly allowance and 'left this week'", () => {
+  const items = [
+    { id: "1", kind: "income" as const, title: "Loan", amount_pence: 300000, cadence: "once" as const, first_on: "2026-09-28", last_on: null, category: null },
+    { id: "2", kind: "commitment" as const, title: "Rent", amount_pence: 50000, cadence: "monthly" as const, first_on: "2026-10-01", last_on: null, category: null },
+  ];
+  const txns = [
+    { id: "a", occurred_on: "2026-11-10", amount_pence: 6000, category: "Groceries", note: null, source: "manual" as const },
+    { id: "b", occurred_on: "2026-11-17", amount_pence: 1500, category: "Takeaway", note: null, source: "manual" as const },
+  ];
+  // Wed 18 Nov: week starts Mon 16; weeks remaining 16–22, 23–29, 30–6, 7–13 = 4
+  const b = computeBudget(term, items, txns, "2026-11-18");
+  assert.equal(b.weeksRemaining, 4);
+  assert.equal(b.income, 300000);
+  assert.equal(b.commitments, 150000);
+  const pool = 20000 + 300000 - 150000 - 6000;
+  assert.equal(b.allowancePerWeek, Math.floor(pool / 4));
+  assert.equal(b.leftThisWeek, Math.floor(pool / 4) - 1500);
+  assert.equal(b.nextCommitment?.on, "2026-12-01");
+  assert.equal(b.lowPoint, null);
+});
+
+test("money: warns about a dip before the instalment lands", () => {
+  const items = [{ id: "1", kind: "income" as const, title: "Loan", amount_pence: 300000, cadence: "once" as const, first_on: "2026-12-10", last_on: null, category: null }];
+  const b = computeBudget({ ...term, opening_pence: 1000 }, items, [], "2026-11-18");
+  assert.ok(b.lowPoint && b.lowPoint.pence < 0 && b.lowPoint.on < "2026-12-10");
+});
+
+test("money: weekly spend series", () => {
+  const w = weeklySpend(term, [{ id: "a", occurred_on: "2026-11-17", amount_pence: 900, category: "x", note: null, source: "manual" }], "2026-11-18");
+  assert.equal(w.at(-1)?.start, "2026-11-16");
+  assert.equal(w.at(-1)?.pence, 900);
+});
+
+test("csv: quoted fields, UK dates, auto-mapping, de-dup keys", () => {
+  const text = 'Date,Description,Amount\r\n18/11/2026,"TESCO STORES, LOUGHBOROUGH",-12.40\r\n18/11/2026,"TESCO STORES, LOUGHBOROUGH",-12.40\r\n19/11/2026,Student Finance,3000.00\r\nbad,row,x\r\n';
+  const rows = parseCsv(text);
+  assert.equal(rows.length, 5);
+  const m = guessMapping(rows[0])!;
+  const { rows: out, skipped } = mapRows(rows.slice(1), m);
+  assert.equal(skipped, 1);
+  assert.equal(out[0].amountPence, 1240);
+  assert.equal(out[0].category, "Groceries");
+  assert.equal(out[2].amountPence, -300000);
+  assert.notEqual(out[0].importKey, out[1].importKey, "two identical purchases stay two rows");
+  assert.equal(parseBankDate("18 Nov 2026"), "2026-11-18");
+  assert.equal(parseBankDate("31/02/2026"), null);
+});
+
+test("csv: separate paid-out / paid-in columns", () => {
+  const rows = parseCsv("Date,Details,Paid out,Paid in\n2026-11-18,Greggs,3.10,\n2026-11-18,Refund,,5.00\n");
+  const { rows: out } = mapRows(rows.slice(1), guessMapping(rows[0])!);
+  assert.deepEqual(out.map((r) => r.amountPence), [310, -500]);
+  assert.equal(out[0].category, "Eating out");
+});
+
+test("body: weekly load flags no rest days and over-target weeks", () => {
+  const wk = "2026-11-16";
+  const d = (n: number) => `2026-11-${16 + n}`;
+  assert.equal(weekLoad({ gym: [d(0), d(2), d(4), d(5)], training: [d(1), d(3)], matches: [d(5)], weekStart: wk }).level, "balanced");
+  assert.equal(weekLoad({ gym: [d(0), d(1), d(2), d(3), d(4), d(5)], training: [d(0), d(2), d(4)], matches: [d(6)], weekStart: wk }).level, "too much");
+  assert.match(weekLoad({ gym: [d(0)], training: [d(1)], matches: [], weekStart: wk }).advice, /room for 3 more/);
+});
+
+test("body: bedtimes past midnight sort after earlier ones", () => {
+  const before = bedMinutes({ night_of: "2026-11-17", bed_at: "2026-11-17T23:30:00Z", wake_at: null }, TZ)!;
+  const after = bedMinutes({ night_of: "2026-11-17", bed_at: "2026-11-18T01:15:00Z", wake_at: null }, TZ)!;
+  assert.ok(after > before);
+  assert.equal(bedClock(after), "01:15");
+});
+
+test("body: sleep chain needs enough nights and compares next days", () => {
+  const logs = [17, 16, 15, 14, 13, 12].map((d, i) => ({
+    night_of: `2026-11-${d}`,
+    bed_at: i < 3 ? `2026-11-${d + 1}T01:30:00Z` : `2026-11-${d}T23:00:00Z`,
+    wake_at: i < 3 ? `2026-11-${d + 1}T10:00:00Z` : `2026-11-${d + 1}T07:30:00Z`,
+  }));
+  const next = new Map(logs.map((l, i) => [`2026-11-${Number(l.night_of.slice(8)) + 1}`, { tasksDone: i < 3 ? 1 : 4, focusStayed: 0, focusAnswered: 0 }]));
+  const c = sleepChain(logs, next, TZ)!;
+  assert.equal(c.late.nights, 3);
+  assert.equal(c.late.avgTasks, 1);
+  assert.equal(c.early.avgTasks, 4);
+  assert.equal(sleepChain(logs.slice(0, 4), next, TZ), null);
+});
+
+const bolognese: Recipe = {
+  id: "r1", title: "Bolognese", status: "staple", portions: 2, minutes: 30, method: null, protein_g: 60,
+  ingredients: [{ name: "Lean mince", qty: "500", unit: "g" }, { name: "Pasta", qty: "200", unit: "g" }],
+};
+const gnocchi: Recipe = { ...bolognese, id: "r2", title: "Gnocchi", ingredients: [{ name: "Gnocchi", qty: "1", unit: "pack" }, { name: "Pasta", qty: "100", unit: "g" }] };
+
+test("meals: leftover lunch links to last night's cook; busy evenings flagged; shopping merges", () => {
+  const rows = [
+    { id: "m1", on_date: "2026-11-16", recipe_id: "r1", note: null },
+    { id: "m2", on_date: "2026-11-18", recipe_id: "r2", note: null },
+  ];
+  const training = { key: "t", source: "session" as const, id: "s", dateKey: "2026-11-18", title: "Korfball training", kind: "training" as const,
+    startsAt: "2026-11-18T19:00:00Z", endsAt: "2026-11-18T21:00:00Z", location: null, cancelled: false };
+  const week = planWeek("2026-11-16", rows, [bolognese, gnocchi], new Map([["2026-11-18", [training]]]), TZ);
+  assert.equal(week[1].lunch?.recipe.title, "Bolognese");
+  assert.equal(week[0].lunch, null);
+  assert.equal(week[2].busy?.reason, "Korfball training");
+  assert.equal(busyEvening([{ ...training, cancelled: true }], TZ), null);
+  const list = shoppingFromPlan(week);
+  assert.deepEqual(list.find((i) => i.name === "Pasta"), { name: "Pasta", qty: "300 g" });
+});

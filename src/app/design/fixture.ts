@@ -85,6 +85,9 @@ export function buildFixture(nowMs: number, opts: { empty?: boolean } = {}): Tod
       wake_target: null,
       wake_step_minutes: 15,
       wake_plan_started: null,
+      bedtime_target: null,
+      gym_target_per_week: 4,
+      gym_quiet_times: null,
     },
     nowMs,
     todayKey: today,
@@ -103,6 +106,9 @@ export function buildFixture(nowMs: number, opts: { empty?: boolean } = {}): Tod
     quietGoals: [],
     activeProjects: 0,
     projectsNeedingAttention: 0,
+    money: null,
+    gym: { done: 0, target: 4, today: null },
+    meals: { dinner: null, lunch: null },
   };
   if (opts.empty) return base;
 
@@ -155,5 +161,8 @@ export function buildFixture(nowMs: number, opts: { empty?: boolean } = {}): Tod
     quietGoals: [{ id: "g", title: "Side hustle: pick one idea", quietDays: 16 }],
     activeProjects: 3,
     projectsNeedingAttention: 1,
+    money: { leftThisWeek: 4250, allowancePerWeek: 9500 },
+    gym: { done: 2, target: 4, today: null },
+    meals: { dinner: "Gnocchi with pesto", lunch: "Leftover bolognese" },
   };
 }

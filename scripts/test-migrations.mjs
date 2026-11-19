@@ -149,6 +149,45 @@ await expectError(
 );
 await db.exec(reset);
 
+// --- Phase 5 tables ---------------------------------------------------------------
+await db.exec(asUser(A));
+await db.exec(`
+  insert into public.budget_periods (title, starts_on, ends_on, opening_pence) values ('Term 1', '2026-09-28', '2026-12-12', 25000);
+  insert into public.money_plan_items (kind, title, amount_pence, cadence, first_on) values ('income', 'Loan instalment', 300000, 'once', '2026-09-28');
+  insert into public.transactions (occurred_on, amount_pence, category, import_key, source) values ('2026-11-18', 450, 'Food', 'k1', 'csv');
+  insert into public.savings_goals (title, target_pence, goal_id) values ('Summer trip', 40000, 'aaaaaaaa-0000-0000-0000-000000000009');
+  insert into public.workouts (on_date, kind) values ('2026-11-18', 'minimum');
+  insert into public.sleep_logs (night_of, bed_at, wake_at) values ('2026-11-17', '2026-11-18 00:30Z', '2026-11-18 08:15Z');
+  insert into public.daily_checkins (on_date, ate_well) values ('2026-11-18', true);
+  insert into public.weigh_ins (on_date, kg) values ('2026-11-18', 78.4);
+  insert into public.lift_entries (on_date, lift, kg, reps) values ('2026-11-18', 'Squat', 90, 5);
+  insert into public.recipes (id, title, status) values ('aaaaaaaa-0000-0000-0000-000000000020', 'Bolognese', 'staple');
+  insert into public.meal_plan (on_date, recipe_id) values ('2026-11-18', 'aaaaaaaa-0000-0000-0000-000000000020');
+  insert into public.shopping_items (name) values ('Oats');
+  insert into public.timetable_sessions (title, kind, weekday, start_time, end_time, starts_on, ends_on) values ('Gym', 'gym', 2, '17:00', '18:00', '2026-09-28', '2026-12-12');
+`);
+ok("owner can use money, body and food tables (gym as a timetable kind)");
+await expectError("CSV rows de-duplicate on import key", `insert into public.transactions (occurred_on, amount_pence, import_key) values ('2026-11-18', 450, 'k1')`, /duplicate key/);
+await expectError("zero-amount transaction rejected", `insert into public.transactions (occurred_on, amount_pence) values ('2026-11-18', 0)`, /check/);
+await expectError("sleep must end after it starts", `insert into public.sleep_logs (night_of, bed_at, wake_at) values ('2026-11-10', '2026-11-11 08:00Z', '2026-11-11 07:00Z')`, /check/);
+await expectError("one dinner per evening", `insert into public.meal_plan (on_date, note) values ('2026-11-18', 'pasta')`, /duplicate key/);
+await db.exec(reset);
+await db.exec(asUser(B));
+const leak5 = await db.query(`select
+  (select count(*) from public.budget_periods)::int a, (select count(*) from public.transactions)::int b,
+  (select count(*) from public.savings_goals)::int c, (select count(*) from public.workouts)::int d,
+  (select count(*) from public.sleep_logs)::int e, (select count(*) from public.weigh_ins)::int f,
+  (select count(*) from public.recipes)::int g, (select count(*) from public.meal_plan)::int h,
+  (select count(*) from public.shopping_items)::int i, (select count(*) from public.money_plan_items)::int j,
+  (select count(*) from public.daily_checkins)::int k, (select count(*) from public.lift_entries)::int l`);
+Object.values(leak5.rows[0]).every((n) => n === 0) ? ok("phase 5 tables isolated between users") : fail("phase 5 isolation", JSON.stringify(leak5.rows[0]));
+await expectError(
+  "cannot plan a meal with someone else's recipe",
+  `insert into public.meal_plan (on_date, recipe_id) values ('2026-11-19', 'aaaaaaaa-0000-0000-0000-000000000020')`,
+  /foreign key/,
+);
+await db.exec(reset);
+
 await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
 await expectError("anonymous role has no table access", `select * from public.tasks`, /permission denied/);
 await db.exec(reset);
