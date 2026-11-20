@@ -5,7 +5,6 @@ import { updateProfile } from "@/app/actions/profile";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
-import { Planned } from "@/components/ui/misc";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
@@ -198,13 +197,6 @@ export function SettingsForm({
         </div>
       </Section>
 
-      <Section title="Reminders" aside={<Planned phase="Phase 7" />}>
-        <p className="text-small text-ink-2">
-          Daily planning, deadline, habit, gym-booking, bedtime and weekly-review reminders, sent as Web Push to your Pixel. None of
-          them are active yet, and none will be described as working until delivery has been tested on your phone.
-        </p>
-      </Section>
-
       <Section title="Honest limits">
         <ul className="flex flex-col gap-2 text-small text-ink-2">
           <li>No automatic MyLboro sync. Timetable is entered once; optional .ics import.</li>
@@ -213,6 +205,7 @@ export function SettingsForm({
           <li>Android battery optimisation can delay push notifications.</li>
           <li>No bank connection unless you opt in later through a regulated provider.</li>
           <li>The assistant is off until it&apos;s configured.</li>
+          <li>Reminders depend on Android delivering them; battery optimisation can delay them.</li>
         </ul>
       </Section>
     </div>

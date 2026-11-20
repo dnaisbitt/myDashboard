@@ -12,6 +12,7 @@ export const PLANNER_TABS = [
   { href: "/planner", label: "Calendar" },
   { href: "/planner/timetable", label: "Timetable" },
   { href: "/planner/routines", label: "Routines & focus" },
+  { href: "/planner/review", label: "Weekly review" },
 ];
 
 export const MONEY_TABS = [

@@ -27,6 +27,7 @@ const profile: Profile = {
   bedtime_target: "23:30",
   gym_target_per_week: 4,
   gym_quiet_times: "Weekdays before 8am; Friday afternoons",
+  reminders: {},
 };
 
 function build(now: number) {

@@ -88,6 +88,7 @@ export function buildFixture(nowMs: number, opts: { empty?: boolean } = {}): Tod
       bedtime_target: null,
       gym_target_per_week: 4,
       gym_quiet_times: null,
+      reminders: {},
     },
     nowMs,
     todayKey: today,

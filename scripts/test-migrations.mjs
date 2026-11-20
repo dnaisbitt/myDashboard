@@ -204,6 +204,29 @@ const leak6 = await db.query(`select (select count(*) from public.ai_usage)::int
 leak6.rows[0].a === 0 && leak6.rows[0].b === 0 ? ok("AI tables isolated between users") : fail("phase 6 isolation");
 await db.exec(reset);
 
+// --- Phase 7 tables ---------------------------------------------------------------
+await db.exec(asUser(A));
+await db.exec(`insert into public.push_subscriptions (endpoint, p256dh, auth, label) values ('https://fcm.googleapis.com/fcm/send/abc', 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM', 'tBHItJI5svbpez7KI4CCXg', 'Pixel 7');`);
+ok("owner can save a push subscription");
+await db.exec(reset);
+// The reminder job writes the log as the service role (bypasses RLS): simulate with the table owner.
+await db.exec(`insert into public.notification_log (id, user_id, type, ref_key, local_date, title, body, url) values ('aaaaaaaa-0000-0000-0000-000000000030', '${A}', 'bedtime', '2026-11-20', '2026-11-20', 'Wind down', 'Bed by 23:30', '/body/sleep')`);
+await expectError("one reminder per type/ref/day", `insert into public.notification_log (user_id, type, ref_key, local_date, title, body, url) values ('${A}', 'bedtime', '2026-11-20', '2026-11-20', 'x', 'y', '/')`, /duplicate key/);
+await db.exec(asUser(A));
+await db.exec(`update public.notification_log set opened_at = now() where id = 'aaaaaaaa-0000-0000-0000-000000000030'`);
+ok("owner can mark a reminder opened");
+await expectError("owner can't rewrite what was sent", `update public.notification_log set body = 'edited' where id = 'aaaaaaaa-0000-0000-0000-000000000030'`, /permission denied/);
+await expectError("app can't insert fake log rows", `insert into public.notification_log (user_id, type, ref_key, local_date, title, body, url) values ('${A}', 'x', 'y', '2026-11-20', 't', 'b', '/')`, /permission denied/);
+await db.exec(`update public.profiles set reminders = '{"bedtime": {"on": true, "at": "22:45"}}' where id = '${A}'`);
+ok("reminder settings stored on the profile");
+await db.exec(reset);
+await db.exec(asUser(B));
+const leak7 = await db.query(`select (select count(*) from public.push_subscriptions)::int a, (select count(*) from public.notification_log)::int b`);
+leak7.rows[0].a === 0 && leak7.rows[0].b === 0 ? ok("push and reminder tables isolated between users") : fail("phase 7 isolation");
+const hijack = await db.query(`update public.notification_log set opened_at = now() returning id`);
+hijack.rows.length === 0 ? ok("other user can't mark someone else's reminders") : fail("phase 7 update isolation");
+await db.exec(reset);
+
 await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
 await expectError("anonymous role has no table access", `select * from public.tasks`, /permission denied/);
 await db.exec(reset);

@@ -52,3 +52,16 @@ Dev only: `/design` (component gallery), `/design/today` and `/design/planner` (
 4. In LifeOS → Settings → Assistant, switch it on.
 
 The app keeps its own ledger (`ai_usage`) and stops calling the API once the monthly estimate reaches `AI_MONTHLY_BUDGET_USD`. Conversations aren't stored. Each request sends a snapshot of your LifeOS data to Anthropic; nothing is sent while the assistant is off. `npm run test:ai` checks the request shape against a fake transport (no network, no cost).
+
+## Reminders (Web Push)
+
+How it works: Supabase `pg_cron` calls `/api/cron/reminders` every 15 minutes (Vercel Hobby cron only allows once a day, so it is only a daily backup at 07:00 UTC). The job works out what's due for each subscribed user, records it in `notification_log` (one per thing per day, so nothing sends twice) and sends Web Push. Tapping a reminder records that it was opened.
+
+1. Run the migrations in `supabase/migrations/` (including `20261120000100_phase7_reminders.sql`).
+2. `npm run gen:secrets` → copy the printed lines into Vercel (Production). Set `VAPID_SUBJECT` to your site URL. Add `SUPABASE_SECRET_KEY` (Supabase → Project Settings → API Keys → Secret key). Redeploy.
+3. Supabase → Database → Extensions: enable **pg_cron** and **pg_net**.
+4. Supabase SQL editor: run `supabase/setup/reminders-cron.sql` with your URL and the **same** `CRON_SECRET`.
+5. On the Pixel, open the installed LifeOS app → Settings → Notifications → **Turn on notifications here** → **Send a test notification** → tap **It arrived** when it shows. Until then, LifeOS says delivery is unconfirmed.
+6. Pixel: Settings → Apps → Chrome → App battery usage → **Unrestricted**, or Android may delay reminders.
+
+Security: `CRON_SECRET` is compared in constant time; `SUPABASE_SECRET_KEY` bypasses row-level security, lives only in Vercel's server env, and is used only by the reminder job, where every query filters by user.

@@ -18,10 +18,11 @@ export type Profile = {
   bedtime_target: string | null;
   gym_target_per_week: number;
   gym_quiet_times: string | null;
+  reminders: Record<string, { on?: boolean; at?: string }>;
 };
 
 export const PROFILE_COLUMNS =
-  "id,display_name,timezone,tone,trackers,ai_enabled,wake_current,wake_target,wake_step_minutes,wake_plan_started,bedtime_target,gym_target_per_week,gym_quiet_times";
+  "id,display_name,timezone,tone,trackers,ai_enabled,wake_current,wake_target,wake_step_minutes,wake_plan_started,bedtime_target,gym_target_per_week,gym_quiet_times,reminders";
 
 export type TaskStatus = "inbox" | "open" | "done" | "archived";
 

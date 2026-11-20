@@ -44,6 +44,11 @@ export function AppShell({ children, bridge }: { children: ReactNode; bridge: Re
     [viewer],
   );
 
+  // Service worker: receives reminders. No caching, so data is never stale.
+  useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
+
   // PWA shortcut / deep link: /?capture=1 opens capture straight away.
   useEffect(() => {
     const url = new URL(window.location.href);

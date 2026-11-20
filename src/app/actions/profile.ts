@@ -30,6 +30,13 @@ const profileSchema = z.object({
   wake_target: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
   wake_step_minutes: z.number().int().min(5).max(30).optional(),
   wake_plan_started: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  // Per-type reminder settings: { daily_plan: { on: true, at: "08:30" }, ... }
+  reminders: z
+    .partialRecord(
+      z.enum(["daily_plan", "deadlines", "overdue", "habits", "gym_booking", "bedtime", "weekly_review", "goals", "money_monthly"]),
+      z.object({ on: z.boolean().optional(), at: z.string().regex(/^\d{2}:\d{2}$/).optional() }),
+    )
+    .optional(),
 });
 
 export async function updateProfile(input: z.input<typeof profileSchema>): Promise<ActionResult> {

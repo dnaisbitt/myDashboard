@@ -375,3 +375,85 @@ test("shared-message imports: clashes are flagged not dropped; past, invalid, du
   ]);
   assert.deepEqual(dropped.map((d) => d.reason), ["listed twice", "already over", "no clear start and end time", "outside the next three weeks"]);
 });
+
+
+import { dueReminders, type Snapshot } from "../src/lib/reminders";
+
+const snap = (over: Partial<Snapshot> = {}): Snapshot => ({
+  nowMin: 9 * 60 + 10,
+  todayKey: "2026-11-18",
+  isoWeekday: 3,
+  dayOfMonth: 18,
+  tone: { habits: "gentle", wake: "gentle", deadlines: "direct", exams: "direct", optional: "quiet" },
+  prefs: {},
+  bedtimeTarget: "23:30",
+  prioritiesPicked: 0,
+  deadlines: [],
+  overdue: [],
+  habits: [],
+  gymTomorrow: null,
+  quietGoals: [],
+  hasBudget: true,
+  ...over,
+});
+
+test("reminders: due only inside the hour after their time", () => {
+  assert.equal(dueReminders(snap({ nowMin: 8 * 60 + 29 })).length, 0);
+  assert.deepEqual(dueReminders(snap({ nowMin: 8 * 60 + 30 })).map((r) => r.type), ["daily_plan"]);
+  assert.equal(dueReminders(snap({ nowMin: 9 * 60 + 30 })).length, 0, "daily plan window closed at 09:30");
+  assert.equal(dueReminders(snap({ nowMin: 8 * 60 + 45, prioritiesPicked: 2 })).length, 0, "no nudge once priorities are picked");
+});
+
+test("reminders: deadlines use the direct tone and say if nothing is planned", () => {
+  const r = dueReminders(snap({ deadlines: [{ id: "t1", title: "Coursework 2", daysAway: 3, label: "Sat 17:00", planned: false, exam: false }] }));
+  const d = r.find((x) => x.type === "deadlines")!;
+  assert.equal(d.title, "Coursework 2: due in 3 days");
+  assert.match(d.body, /No time planned/);
+  assert.equal(d.refKey, "t1");
+});
+
+test("reminders: quiet tone mutes pushes for that area; settings can switch a type off or move it", () => {
+  const habit = { id: "h1", title: "Gym", kind: "build" as const, part: "any" as const, due: true, logged: false, minimum: "30 minutes" };
+  assert.equal(dueReminders(snap({ nowMin: 19 * 60, habits: [habit] })).length, 1);
+  assert.match(dueReminders(snap({ nowMin: 19 * 60, habits: [habit] }))[0].body, /30 minutes/);
+  assert.equal(dueReminders(snap({ nowMin: 19 * 60, habits: [habit], tone: { ...snap().tone, habits: "quiet" } })).length, 0);
+  assert.equal(dueReminders(snap({ nowMin: 19 * 60, habits: [habit], prefs: { habits: { on: false } } })).length, 0);
+  assert.equal(dueReminders(snap({ nowMin: 20 * 60 + 5, habits: [habit], prefs: { habits: { at: "20:00" } } })).length, 1);
+  assert.equal(dueReminders(snap({ nowMin: 19 * 60, habits: [{ ...habit, logged: true }] })).length, 0, "already logged");
+});
+
+test("reminders: bedtime wind-down 45 minutes before target, across midnight too", () => {
+  assert.deepEqual(dueReminders(snap({ nowMin: 22 * 60 + 45, bedtimeTarget: "23:30" })).map((r) => r.type), ["bedtime"]);
+  assert.deepEqual(dueReminders(snap({ nowMin: 23 * 60 + 50, bedtimeTarget: "00:30" })).map((r) => r.type), ["bedtime"]);
+  assert.equal(dueReminders(snap({ nowMin: 22 * 60 + 45, bedtimeTarget: null })).length, 0);
+});
+
+test("reminders: weekly review on Sundays only, money on the 1st, gym booking only if unbooked", () => {
+  assert.equal(dueReminders(snap({ nowMin: 19 * 60 + 5, isoWeekday: 6, bedtimeTarget: null })).length, 0);
+  assert.deepEqual(dueReminders(snap({ nowMin: 19 * 60 + 5, isoWeekday: 7, bedtimeTarget: null })).map((r) => r.type), ["weekly_review"]);
+  assert.deepEqual(dueReminders(snap({ nowMin: 10 * 60 + 5, dayOfMonth: 1, prioritiesPicked: 1 })).map((r) => r.type), ["money_monthly"]);
+  assert.equal(dueReminders(snap({ nowMin: 20 * 60, bedtimeTarget: null, gymTomorrow: { time: "07:00", booked: true } })).length, 0);
+  assert.equal(dueReminders(snap({ nowMin: 20 * 60, bedtimeTarget: null, gymTomorrow: { time: "07:00", booked: false } })).length, 1);
+});
+
+
+import { summariseLearning, type SentReminder } from "../src/lib/reminder-learning";
+
+test("learning: needs 10 reminders before drawing conclusions", () => {
+  const s = summariseLearning([{ type: "habits", hour: 19, opened: true, acted: true }], {});
+  assert.equal(s.enoughData, false);
+  assert.equal(s.suggestions.length, 0);
+});
+
+test("learning: spots evening-vs-morning response and offers to move or switch off, never applies anything", () => {
+  const rows: SentReminder[] = [
+    ...Array.from({ length: 6 }, (_, i) => ({ type: "deadlines" as const, hour: 9, opened: i === 0, acted: false })),
+    ...Array.from({ length: 6 }, () => ({ type: "habits" as const, hour: 19, opened: true, acted: true })),
+  ];
+  const s = summariseLearning(rows, {});
+  assert.equal(s.enoughData, true);
+  assert.match(s.sentences[0], /evening reminders \(100%\) far more than morning ones \(17%\)/);
+  assert.ok(s.suggestions.some((x) => x.change.type === "deadlines" && x.change.at === "19:00"));
+  assert.ok(s.suggestions.some((x) => x.change.type === "deadlines" && x.change.on === false));
+  assert.ok(s.sentences.some((x) => /Habits not logged yet.*works/.test(x)));
+});
