@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowUp, ListPlus, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { ArrowUp, CalendarPlus, ListPlus, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { saveEvent } from "@/app/actions/events";
 import { createTask, getTaskFormOptions } from "@/app/actions/tasks";
 import { Markdown } from "@/components/ai/markdown";
 import { Button, IconButton, Spinner } from "@/components/ui/button";
@@ -10,15 +11,14 @@ import { Select } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { STREAM_ERROR } from "@/lib/ai/stream-protocol";
 import { cn } from "@/lib/cn";
-import { localToIso } from "@/lib/time";
+import { formatTime, keyLabel, localToIso } from "@/lib/time";
+import { PLACE_LABEL, type FocusPlace } from "@/lib/types";
 
 type Msg = { role: "user" | "assistant"; content: string; error?: boolean };
 type Status = { ready: boolean; message: string; model: string | null; spend: { month: string; cap: string } | null };
 
 const ACTIONS = [
   { key: "focus", label: "What should I focus on today?" },
-  { key: "plan_day", label: "Plan my day" },
-  { key: "plan_week", label: "Plan my week" },
   { key: "overcommit", label: "Am I overcommitted?" },
   { key: "review", label: "Weekly review" },
 ] as const;
@@ -105,7 +105,7 @@ function Chat({ tz }: { tz: string }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
-  const [mode, setMode] = useState<"chat" | "breakdown">("chat");
+  const [mode, setMode] = useState<"chat" | "breakdown" | "plan-day" | "plan-week">("chat");
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -180,10 +180,28 @@ function Chat({ tz }: { tz: string }) {
       <div ref={scroller} className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5" aria-live="polite">
         {mode === "breakdown" ? (
           <Breakdown tz={tz} onDone={() => setMode("chat")} onSpent={loadStatus} />
+        ) : mode === "plan-day" || mode === "plan-week" ? (
+          <PlanPanel key={mode} scope={mode === "plan-day" ? "day" : "week"} tz={tz} onDone={() => setMode("chat")} onSpent={loadStatus} />
         ) : msgs.length === 0 ? (
           <div className="flex flex-col gap-3">
             <p className="text-small text-ink-2">Ask anything about your plans, or start with one of these. It reads your current tasks, schedule, habits, goals and money each time, and only suggests.</p>
             <div className="flex flex-col items-start gap-1.5">
+              {(
+                [
+                  ["plan-day", "Plan my day"],
+                  ["plan-week", "Plan my week"],
+                ] as const
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+                >
+                  <CalendarPlus size={14} aria-hidden />
+                  {label}
+                </button>
+              ))}
               {ACTIONS.map((a) => (
                 <button
                   key={a.key}
@@ -422,6 +440,179 @@ function Breakdown({ tz, onDone, onSpent }: { tz: string; onDone: () => void; on
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+type PlannedBlock = {
+  date: string;
+  start: string;
+  end: string;
+  title: string;
+  kind: "focus" | "gym" | "routine" | "event";
+  place: FocusPlace | null;
+  why: string;
+  startsAt: string;
+  endsAt: string;
+};
+
+type PlanResult = { summary: string; warnings: string[]; blocks: PlannedBlock[]; dropped: Array<{ title: string; reason: string }> };
+
+/**
+ * Proposed schedule blocks. The server has already dropped anything that clashes
+ * with your schedule; nothing is added until you tick blocks and press Add.
+ */
+function PlanPanel({ scope, tz, onDone, onSpent }: { scope: "day" | "week"; tz: string; onDone: () => void; onSpent: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<PlanResult | null>(null);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [pending, start] = useTransition();
+  const { notify } = useToast();
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.message ?? "Couldn't make a plan.");
+      setPlan(j as PlanResult);
+      setPicked(new Set((j as PlanResult).blocks.map((_, i) => i)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't make a plan.");
+    } finally {
+      setLoading(false);
+      onSpent();
+    }
+  };
+
+  useEffect(() => {
+    const t = window.setTimeout(load, 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const byDay = new Map<string, Array<{ b: PlannedBlock; i: number }>>();
+  plan?.blocks.forEach((b, i) => byDay.set(b.date, [...(byDay.get(b.date) ?? []), { b, i }]));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <button type="button" onClick={onDone} className="self-start text-small text-ink-2 hover:text-ink">
+        ← Back
+      </button>
+      <p className="text-body font-medium">{scope === "day" ? "Plan my day" : "Plan my week"}</p>
+      {loading ? (
+        <span className="flex items-center gap-2 text-small text-ink-2">
+          <Spinner /> Reading your schedule and deadlines…
+        </span>
+      ) : error ? (
+        <>
+          <p className="text-small text-danger">{error}</p>
+          <Button size="sm" variant="ghost" className="self-start" onClick={load}>
+            Try again
+          </Button>
+        </>
+      ) : plan ? (
+        <>
+          <p className="text-small text-ink-2">{plan.summary}</p>
+          {plan.warnings.length ? (
+            <ul className="list-disc pl-4 text-small text-ink">
+              {plan.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+          {plan.blocks.length ? (
+            <div className="flex flex-col gap-4">
+              {[...byDay.entries()].map(([day, items]) => (
+                <div key={day} className="flex flex-col">
+                  {scope === "week" ? (
+                    <p className="mb-1 text-small font-medium">{keyLabel(day, { weekday: "long", day: "numeric", month: "short" })}</p>
+                  ) : null}
+                  <ul className="flex flex-col divide-y divide-rule border-y border-rule">
+                    {items.map(({ b, i }) => (
+                      <li key={i}>
+                        <label className="flex cursor-pointer items-start gap-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            className="mt-1 size-4 accent-[var(--ink)]"
+                            checked={picked.has(i)}
+                            onChange={(e) => {
+                              const next = new Set(picked);
+                              if (e.target.checked) next.add(i);
+                              else next.delete(i);
+                              setPicked(next);
+                            }}
+                          />
+                          <span className="w-[86px] shrink-0 pt-px text-small text-ink-2">
+                            {formatTime(b.startsAt, tz)}–{formatTime(b.endsAt, tz)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-body">{b.title}</span>
+                            <span className="text-micro text-ink-2">
+                              {b.kind === "focus" ? "Focus block" : b.kind === "gym" ? "Gym" : b.kind === "routine" ? "Routine" : "Block"}
+                              {b.place ? ` · ${PLACE_LABEL[b.place]}` : ""} · {b.why}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-small text-ink-2">No blocks to suggest: there&apos;s no free time that fits, or nothing needs it.</p>
+          )}
+          {plan.dropped.length ? (
+            <p className="text-micro text-ink-3">
+              Left out {plan.dropped.length} suggestion{plan.dropped.length === 1 ? "" : "s"} that didn&apos;t fit (
+              {plan.dropped.map((d) => d.reason).filter((r, j, a) => a.indexOf(r) === j).join("; ")}).
+            </p>
+          ) : null}
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={load}>
+              Re-plan
+            </Button>
+            <Button
+              variant="primary"
+              pending={pending}
+              disabled={!picked.size}
+              onClick={() =>
+                start(async () => {
+                  let added = 0;
+                  let failed = 0;
+                  for (const i of [...picked].sort((a, b) => a - b)) {
+                    const b = plan.blocks[i];
+                    const r = await saveEvent({
+                      title: b.title,
+                      kind: b.kind,
+                      startsAt: b.startsAt,
+                      endsAt: b.endsAt,
+                      location: null,
+                      place: b.kind === "focus" ? b.place : null,
+                    });
+                    if (r.ok) added++;
+                    else failed++;
+                  }
+                  notify(failed ? `Added ${added}, ${failed} couldn't be saved` : `Added ${added} block${added === 1 ? "" : "s"} to your schedule`, {
+                    tone: failed ? "error" : "ok",
+                  });
+                  if (added) onDone();
+                })
+              }
+            >
+              Add {picked.size} to schedule
+            </Button>
+          </div>
+          <p className="text-micro text-ink-3">Added blocks are normal blocks: edit or delete them on Today or in the Planner.</p>
+        </>
+      ) : null}
     </div>
   );
 }

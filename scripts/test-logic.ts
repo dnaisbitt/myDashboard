@@ -323,3 +323,29 @@ test("meals: leftover lunch links to last night's cook; busy evenings flagged; s
   const list = shoppingFromPlan(week);
   assert.deepEqual(list.find((i) => i.name === "Pasta"), { name: "Pasta", qty: "300 g" });
 });
+
+import { vetProposals } from "../src/lib/schedule";
+
+test("assistant proposals: clashes, past times, bad ranges and self-overlaps are dropped", () => {
+  const toIso = (k: string, t: string) => localToIso(k, t, TZ);
+  const existing = [
+    { title: "Korfball training", startsAt: toIso("2026-11-18", "19:00"), endsAt: toIso("2026-11-18", "21:00"), cancelled: false },
+    { title: "Cancelled lecture", startsAt: toIso("2026-11-18", "10:00"), endsAt: toIso("2026-11-18", "11:00"), cancelled: true },
+  ];
+  const { keep, dropped } = vetProposals(
+    [
+      { date: "2026-11-18", start: "17:00", end: "18:00", title: "Ch. 4 questions" },
+      { date: "2026-11-18", start: "20:00", end: "21:00", title: "Clashes with training" },
+      { date: "2026-11-18", start: "10:00", end: "11:00", title: "Uses the cancelled slot" },
+      { date: "2026-11-18", start: "17:30", end: "18:30", title: "Overlaps the first proposal" },
+      { date: "2026-11-18", start: "08:00", end: "09:00", title: "Already past" },
+      { date: "2026-11-30", start: "09:00", end: "10:00", title: "Too far ahead" },
+      { date: "2026-11-18", start: "15:00", end: "14:00", title: "Backwards" },
+    ],
+    existing,
+    { fromKey: "2026-11-18", toKey: "2026-11-24", nowMs: Date.parse("2026-11-18T09:30:00Z"), toIso },
+  );
+  assert.deepEqual(keep.map((k) => k.title), ["Ch. 4 questions", "Uses the cancelled slot"]);
+  assert.equal(dropped.length, 5);
+  assert.match(dropped[0].reason, /Korfball/);
+});

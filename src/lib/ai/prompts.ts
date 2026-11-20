@@ -90,3 +90,44 @@ export function breakdownPrompt(input: { text?: string; projectTitle?: string; p
     : `this idea: "${input.text}"`;
   return `Break ${subject} into 3–8 concrete next actions I could each do in one sitting of 15–120 minutes. Order them so the first one is easy to start today. Don't repeat tasks that already exist in the context. If it's a vague idea (like a side-hustle idea), start with small tests that check whether it's worth doing.`;
 }
+
+export const PLAN_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string", description: "One or two sentences on the shape of the plan." },
+    blocks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "yyyy-mm-dd" },
+          start: { type: "string", description: "HH:MM, 24-hour, local time" },
+          end: { type: "string", description: "HH:MM, 24-hour, local time" },
+          title: { type: "string", description: "One concrete task, specific enough to know when it's done. Under 90 characters." },
+          kind: { type: "string", enum: ["focus", "gym", "routine", "event"] },
+          place: { type: ["string", "null"], enum: ["library", "home", "group_room", "other", null] },
+          why: { type: "string", description: "Under 15 words: which deadline, priority or goal this serves." },
+        },
+        required: ["date", "start", "end", "title", "kind", "place", "why"],
+        additionalProperties: false,
+      },
+    },
+    warnings: { type: "array", items: { type: "string" }, description: "Up to 3 short notes: overcommitment, things that don't fit, what to drop." },
+  },
+  required: ["summary", "blocks", "warnings"],
+  additionalProperties: false,
+} as const;
+
+export function planPrompt(scope: "day" | "week", fromKey: string, toKey: string, fixed: string) {
+  return `Propose ${scope === "day" ? "the rest of today's" : "this coming week's"} time blocks, from ${fromKey} to ${toKey}, to add to my LifeOS schedule.
+
+Already fixed (do not overlap any of these; cancelled ones are free):
+${fixed}
+
+Rules for the blocks you propose:
+- Only use free time. Nothing in the past. Leave travel and meal gaps.
+- Focus blocks are 30 or 60 minutes, each with one concrete task from my deadlines, priorities or project next steps. Hard coursework goes in the evening. If 10:00–16:00 is free on a day, put one small, specific 30-minute task in it.
+- ${scope === "day" ? "At most 4 blocks." : "At most 3 blocks per day and 14 in total."} A realistic plan beats a packed one; leave real breaks.
+- Only add gym blocks if my weekly gym count is below target and the day isn't already heavy with training or a match.
+- Don't duplicate anything already in the fixed schedule.`;
+}

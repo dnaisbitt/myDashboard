@@ -135,3 +135,49 @@ export function freeGaps(
   if (to - cursor >= minGap) gaps.push({ from: cursor, to });
   return gaps;
 }
+
+/** True when two [start, end) instants overlap. */
+export function overlaps(a: { startsAt: string; endsAt: string }, b: { startsAt: string; endsAt: string }) {
+  return Date.parse(a.startsAt) < Date.parse(b.endsAt) && Date.parse(b.startsAt) < Date.parse(a.endsAt);
+}
+
+export type ProposedBlock = { date: string; start: string; end: string; title: string };
+
+/**
+ * Server-side check for assistant-proposed blocks: inside the allowed date range,
+ * valid times, not in the past, and not clashing with anything already scheduled
+ * (or with each other). Returns the keepers and the reasons others were dropped.
+ */
+export function vetProposals<T extends ProposedBlock>(
+  proposals: T[],
+  existing: Array<Pick<Block, "startsAt" | "endsAt" | "title" | "cancelled">>,
+  opts: { fromKey: string; toKey: string; nowMs: number; toIso: (key: string, hhmm: string) => string },
+): { keep: Array<T & { startsAt: string; endsAt: string }>; dropped: Array<{ title: string; reason: string }> } {
+  const keep: Array<T & { startsAt: string; endsAt: string }> = [];
+  const dropped: Array<{ title: string; reason: string }> = [];
+  const live = existing.filter((b) => !b.cancelled);
+  for (const p of proposals) {
+    if (p.date < opts.fromKey || p.date > opts.toKey) {
+      dropped.push({ title: p.title, reason: "outside the planning window" });
+      continue;
+    }
+    if (!/^\d{2}:\d{2}$/.test(p.start) || !/^\d{2}:\d{2}$/.test(p.end) || p.end <= p.start) {
+      dropped.push({ title: p.title, reason: "invalid times" });
+      continue;
+    }
+    const startsAt = opts.toIso(p.date, p.start);
+    const endsAt = opts.toIso(p.date, p.end);
+    if (Date.parse(startsAt) < opts.nowMs) {
+      dropped.push({ title: p.title, reason: "already in the past" });
+      continue;
+    }
+    const slot = { startsAt, endsAt };
+    const clash = live.find((b) => overlaps(slot, b)) ?? keep.find((k) => overlaps(slot, k));
+    if (clash) {
+      dropped.push({ title: p.title, reason: `clashes with ${clash.title}` });
+      continue;
+    }
+    keep.push({ ...p, startsAt, endsAt });
+  }
+  return { keep, dropped };
+}
