@@ -40,6 +40,7 @@ export type TodayData = {
   money: { leftThisWeek: number; allowancePerWeek: number } | null;
   gym: { done: number; target: number; today: "full" | "minimum" | null };
   meals: { dinner: string | null; lunch: string | null };
+  briefing: { content: string; createdAt: string } | null;
 };
 
 /** Everything the Today page shows, from real rows only. */
@@ -93,13 +94,14 @@ export async function getTodayData(): Promise<TodayData> {
   )?.error;
   if (firstError) throw new Error(`Could not load today: ${firstError.message}`);
 
-  const [decisions, goals, projects, money, workouts, meals] = await Promise.all([
+  const [decisions, goals, projects, money, workouts, meals, briefing] = await Promise.all([
     getDecisionQueue(3),
     getGoals(),
     getProjects(),
     getMoney(),
     supabase.from("workouts").select("on_date,kind").gte("on_date", weekStartKey(todayKey)),
     supabase.from("meal_plan").select("on_date,recipe_id,note,recipes(title,portions)").in("on_date", [addDaysToKey(todayKey, -1), todayKey]),
+    supabase.from("ai_briefings").select("content,created_at").eq("on_date", todayKey).maybeSingle(),
   ]);
   const budget = money.period ? computeBudget(money.period, money.items, money.txns, todayKey) : null;
   type MealRow = { on_date: string; note: string | null; recipes: { title: string; portions: number } | null };
@@ -143,5 +145,6 @@ export async function getTodayData(): Promise<TodayData> {
       dinner: tonight ? (tonight.recipes?.title ?? tonight.note) : null,
       lunch: lastNight?.recipes && lastNight.recipes.portions >= 2 ? `Leftover ${lastNight.recipes.title}` : null,
     },
+    briefing: briefing.data ? { content: briefing.data.content as string, createdAt: briefing.data.created_at as string } : null,
   };
 }

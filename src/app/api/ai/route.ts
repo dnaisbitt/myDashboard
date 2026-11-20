@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server";
+import { getSpend } from "@/lib/ai/budget";
+import { formatUsd } from "@/lib/ai/pricing";
 import { aiStatusMessage, resolveAiStatus } from "@/lib/ai/provider";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
-/**
- * Assistant endpoint (skeleton). Requires a signed-in user, then checks the
- * single on/off gate. Until Phase 6 it always answers 503 "not configured",
- * and never returns generated or placeholder text.
- */
-export async function POST() {
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "not_configured", message: "Database not configured." }, { status: 503 });
-  }
+/** Assistant status and this month's estimated spend. No model call. */
+export async function GET() {
+  if (!isSupabaseConfigured()) return NextResponse.json({ ready: false, message: "Database not configured." }, { status: 503 });
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
@@ -19,10 +15,13 @@ export async function POST() {
 
   const { data: profile } = await supabase.from("profiles").select("ai_enabled").eq("id", userId).maybeSingle();
   const status = resolveAiStatus(Boolean(profile?.ai_enabled));
-  if (status.state !== "ready") {
-    return NextResponse.json({ error: "not_configured", reason: status.reason, message: aiStatusMessage(status) }, { status: 503 });
-  }
-
-  // Phase 6: validate body, build context, call status.provider.generate(), return text.
-  return NextResponse.json({ error: "not_configured", reason: "adapter_not_built" }, { status: 503 });
+  const spend = await getSpend(supabase).catch(() => null);
+  return NextResponse.json({
+    ready: status.state === "ready",
+    message: aiStatusMessage(status),
+    model: status.state === "ready" ? status.model : null,
+    spend: spend
+      ? { month: formatUsd(spend.monthMicroUsd), cap: formatUsd(spend.capMicroUsd), monthMicroUsd: spend.monthMicroUsd, capMicroUsd: spend.capMicroUsd }
+      : null,
+  });
 }

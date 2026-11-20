@@ -92,11 +92,3 @@ export async function buildAssistantContext(): Promise<AssistantContext> {
     ],
   };
 }
-
-/** Ground rules every prompt starts with (used from Phase 6). */
-export const ASSISTANT_RULES = [
-  "Use only the data in the provided context. Never invent tasks, events, numbers or history.",
-  "If something isn't in the context, say you don't have that data. Items in notTracked are not available.",
-  "You cannot see the user's phone, apps, email, university portal, gym bookings or bank.",
-  "Prefer realistic plans over packed ones. Flag overcommitment plainly.",
-].join("\n");

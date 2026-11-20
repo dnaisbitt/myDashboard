@@ -188,6 +188,22 @@ await expectError(
 );
 await db.exec(reset);
 
+// --- Phase 6 tables ---------------------------------------------------------------
+await db.exec(asUser(A));
+await db.exec(`
+  insert into public.ai_usage (kind, model, input_tokens, output_tokens, cost_micro_usd) values ('chat', 'claude-opus-5-5', 5000, 400, 28000);
+  insert into public.ai_briefings (on_date, content, model) values ('2026-11-19', 'Focus on coursework.', 'claude-opus-5-5');
+`);
+ok("owner can record AI usage and a briefing");
+await expectError("usage ledger can't be edited (append-only)", `update public.ai_usage set cost_micro_usd = 0`, /permission denied/);
+await expectError("usage ledger can't be deleted from the app", `delete from public.ai_usage`, /permission denied/);
+await expectError("one briefing per day", `insert into public.ai_briefings (on_date, content, model) values ('2026-11-19', 'x', 'm')`, /duplicate key/);
+await db.exec(reset);
+await db.exec(asUser(B));
+const leak6 = await db.query(`select (select count(*) from public.ai_usage)::int a, (select count(*) from public.ai_briefings)::int b`);
+leak6.rows[0].a === 0 && leak6.rows[0].b === 0 ? ok("AI tables isolated between users") : fail("phase 6 isolation");
+await db.exec(reset);
+
 await db.exec(`set role anon; select set_config('request.jwt.claim.sub', '', false);`);
 await expectError("anonymous role has no table access", `select * from public.tasks`, /permission denied/);
 await db.exec(reset);

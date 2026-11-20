@@ -101,7 +101,7 @@ export function AppShell({ children, bridge }: { children: ReactNode; bridge: Re
 
         <CaptureDialog open={overlay === "capture"} onClose={close} tz={viewer.tz} initialAsPriority={captureAsPriority} />
         <SearchDialog open={overlay === "search"} onClose={close} onPick={api.openTask} tz={viewer.tz} />
-        <AssistantDrawer open={overlay === "assistant"} onClose={close} ready={viewer.aiReady} message={viewer.aiMessage} />
+        <AssistantDrawer open={overlay === "assistant"} onClose={close} ready={viewer.aiReady} message={viewer.aiMessage} tz={viewer.tz} />
         <LogSheet open={overlay === "log"} onClose={close} />
         <TaskDialog task={task} onClose={() => setTask(null)} tz={viewer.tz} />
       </ToastProvider>

@@ -51,7 +51,13 @@ function Section({ id, title, aside, children }: { id?: string; title: string; a
   );
 }
 
-export function SettingsForm({ profile, ai }: { profile: Profile; ai: { message: string; providerConfigured: boolean } }) {
+export function SettingsForm({
+  profile,
+  ai,
+}: {
+  profile: Profile;
+  ai: { message: string; providerConfigured: boolean; model: string | null; spend: { month: string; cap: string } | null };
+}) {
   const { notify } = useToast();
   const [pending, start] = useTransition();
   const [name, setName] = useState(profile.display_name ?? "");
@@ -148,7 +154,7 @@ export function SettingsForm({ profile, ai }: { profile: Profile; ai: { message:
         ))}
       </Section>
 
-      <Section id="assistant" title="Assistant" aside={<Planned phase="Phase 6" />}>
+      <Section id="assistant" title="Assistant" aside="Off by default. Reads a snapshot of your LifeOS data per request and only suggests.">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-body">Use the AI assistant</p>
@@ -166,9 +172,25 @@ export function SettingsForm({ profile, ai }: { profile: Profile; ai: { message:
         </div>
         <div className="rounded-md bg-sunken/60 px-4 py-3 text-small text-ink-2">
           <p>
-            Server provider key: <span className="font-medium text-ink">{ai.providerConfigured ? "present" : "not set"}</span>. Keys live
-            only in server environment variables and never reach this page.
+            Server provider key: <span className="font-medium text-ink">{ai.providerConfigured ? "present" : "not set"}</span>
+            {ai.model ? (
+              <>
+                {" "}· model <span className="font-medium text-ink">{ai.model}</span>
+              </>
+            ) : null}
+            . Keys live only in server environment variables and never reach this page.
           </p>
+          {ai.spend ? (
+            <p className="mt-2">
+              This month: <span className="font-medium text-ink">{ai.spend.month}</span> of the {ai.spend.cap} app limit (an estimate from
+              token counts). When the limit is reached the assistant pauses until the 1st.
+            </p>
+          ) : null}
+          <p className="mt-2">
+            Each time you ask, a snapshot of your LifeOS data (tasks, schedule, habits, goals, money and body summaries) is sent to
+            Anthropic to answer. Nothing is sent while the assistant is off or when you don&apos;t ask.
+          </p>
+          <p className="mt-2">Conversations aren&apos;t saved. Only token counts and the estimated cost of each request are stored, plus today&apos;s briefing.</p>
           <p className="mt-2">
             A Claude Pro subscription doesn&apos;t include API access. API use is billed per token through the Claude Console. Set a
             monthly spend limit there (around £5) before adding a key.

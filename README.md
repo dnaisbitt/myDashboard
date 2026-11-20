@@ -43,3 +43,12 @@ Dev only: `/design` (component gallery), `/design/today` and `/design/planner` (
 
 - **Supabase Free** pauses a project after about 7 days of low activity. Phase 7 reminders will run inside the database (pg_cron), which should also keep it active. That will be verified, not assumed.
 - **Vercel Hobby** cron jobs run at most **once a day**, with ±59 minutes timing precision. They're unusable for timed reminders, so Phase 7 will use Supabase `pg_cron` + `pg_net` to call a push endpoint instead.
+
+## AI assistant (optional, off by default)
+
+1. Create an API key at console.anthropic.com. API usage is billed separately from a Claude Pro plan.
+2. In the Console, set a **monthly spend limit** (e.g. £5 / $6) under Billing → Limits. This is the hard backstop.
+3. In Vercel → Settings → Environment Variables (Sensitive, server-only; never `NEXT_PUBLIC_`), add `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=…`. Optional: `AI_MODEL` (default `claude-opus-5-5`), `AI_MONTHLY_BUDGET_USD` (default 6), `AI_DAILY_REQUEST_LIMIT` (default 60). Redeploy.
+4. In LifeOS → Settings → Assistant, switch it on.
+
+The app keeps its own ledger (`ai_usage`) and stops calling the API once the monthly estimate reaches `AI_MONTHLY_BUDGET_USD`. Conversations aren't stored. Each request sends a snapshot of your LifeOS data to Anthropic; nothing is sent while the assistant is off. `npm run test:ai` checks the request shape against a fake transport (no network, no cost).

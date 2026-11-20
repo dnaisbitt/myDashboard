@@ -67,7 +67,7 @@ export function TodayView({ data, ai }: { data: TodayData; ai: { ready: boolean;
           {/* Phone stays deliberately small: decisions, briefing and the strip are laptop-only. */}
           <div className="hidden flex-col gap-12 lg:flex">
             <Decide items={data.decisions} nowMs={data.nowMs} tz={tz} />
-            <Briefing ready={ai.ready} message={ai.message} />
+            <Briefing ready={ai.ready} message={ai.message} briefing={data.briefing} tz={tz} />
           </div>
         </div>
       </div>

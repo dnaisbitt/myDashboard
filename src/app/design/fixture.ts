@@ -109,6 +109,7 @@ export function buildFixture(nowMs: number, opts: { empty?: boolean } = {}): Tod
     money: null,
     gym: { done: 0, target: 4, today: null },
     meals: { dinner: null, lunch: null },
+    briefing: null,
   };
   if (opts.empty) return base;
 
