@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, CalendarPlus, ListPlus, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { ArrowUp, CalendarPlus, ListPlus, MessageSquareText, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { saveEvent } from "@/app/actions/events";
@@ -71,7 +71,7 @@ export function AssistantDrawer({
               <X size={16} aria-hidden />
             </IconButton>
           </div>
-          {ready ? <Chat tz={tz} /> : <NotReady message={message} onClose={onClose} />}
+          {ready ? <Chat tz={tz} onClose={onClose} /> : <NotReady message={message} onClose={onClose} />}
         </div>
       ) : null}
     </dialog>
@@ -100,7 +100,7 @@ function NotReady({ message, onClose }: { message: string; onClose: () => void }
   );
 }
 
-function Chat({ tz }: { tz: string }) {
+function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -212,6 +212,14 @@ function Chat({ tz }: { tz: string }) {
                   {a.label}
                 </button>
               ))}
+              <Link
+                href="/share"
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+              >
+                <MessageSquareText size={14} aria-hidden />
+                Add dates from a message (e.g. WhatsApp)
+              </Link>
               <button
                 type="button"
                 onClick={() => setMode("breakdown")}

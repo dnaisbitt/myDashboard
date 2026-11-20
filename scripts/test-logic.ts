@@ -349,3 +349,29 @@ test("assistant proposals: clashes, past times, bad ranges and self-overlaps are
   assert.equal(dropped.length, 5);
   assert.match(dropped[0].reason, /Korfball/);
 });
+
+
+import { vetImports } from "../src/lib/schedule";
+
+test("shared-message imports: clashes are flagged not dropped; past, invalid, duplicate and far-off items are dropped", () => {
+  const toIso = (k: string, t: string) => localToIso(k, t, TZ);
+  const existing = [{ title: "Korfball training", startsAt: toIso("2026-11-18", "19:00"), endsAt: toIso("2026-11-18", "21:00"), cancelled: false }];
+  const mk = (date: string, start: string, end: string, title: string) => ({ date, start, end, title, kind: "training", location: null });
+  const { items, dropped } = vetImports(
+    [
+      mk("2026-11-18", "19:30", "21:00", "Training (moved)"),
+      mk("2026-11-20", "18:00", "20:00", "Training"),
+      mk("2026-11-20", "18:00", "20:00", "training"),
+      mk("2026-11-18", "07:00", "08:00", "Morning session"),
+      mk("2026-11-22", "", "", "Match TBC"),
+      mk("2026-12-30", "18:00", "20:00", "Far off"),
+    ],
+    existing,
+    { fromKey: "2026-11-18", toKey: "2026-12-09", nowMs: Date.parse("2026-11-18T09:30:00Z"), toIso },
+  );
+  assert.deepEqual(items.map((i) => [i.title, i.clash]), [
+    ["Training (moved)", "Korfball training"],
+    ["Training", null],
+  ]);
+  assert.deepEqual(dropped.map((d) => d.reason), ["listed twice", "already over", "no clear start and end time", "outside the next three weeks"]);
+});

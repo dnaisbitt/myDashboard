@@ -181,3 +181,44 @@ export function vetProposals<T extends ProposedBlock>(
   }
   return { keep, dropped };
 }
+
+
+export type ImportedItem = ProposedBlock & { kind: string; location: string | null };
+
+/**
+ * Checks events read out of a shared message. Invalid, past or out-of-range items
+ * are dropped. Clashes are kept but flagged (and start unticked): a clash often
+ * means "training moved", which only you can judge.
+ */
+export function vetImports<T extends ImportedItem>(
+  items: T[],
+  existing: Array<Pick<Block, "startsAt" | "endsAt" | "title" | "cancelled">>,
+  opts: { fromKey: string; toKey: string; nowMs: number; toIso: (key: string, hhmm: string) => string },
+): { items: Array<T & { startsAt: string; endsAt: string; clash: string | null }>; dropped: Array<{ title: string; reason: string }> } {
+  const out: Array<T & { startsAt: string; endsAt: string; clash: string | null }> = [];
+  const dropped: Array<{ title: string; reason: string }> = [];
+  const live = existing.filter((b) => !b.cancelled);
+  for (const it of items) {
+    if (it.date < opts.fromKey || it.date > opts.toKey) {
+      dropped.push({ title: it.title, reason: "outside the next three weeks" });
+      continue;
+    }
+    if (!/^\d{2}:\d{2}$/.test(it.start) || !/^\d{2}:\d{2}$/.test(it.end) || it.end <= it.start) {
+      dropped.push({ title: it.title, reason: "no clear start and end time" });
+      continue;
+    }
+    const startsAt = opts.toIso(it.date, it.start);
+    const endsAt = opts.toIso(it.date, it.end);
+    if (Date.parse(endsAt) <= opts.nowMs) {
+      dropped.push({ title: it.title, reason: "already over" });
+      continue;
+    }
+    if (out.some((o) => o.startsAt === startsAt && o.endsAt === endsAt && o.title.toLowerCase() === it.title.toLowerCase())) {
+      dropped.push({ title: it.title, reason: "listed twice" });
+      continue;
+    }
+    const hit = live.find((b) => overlaps({ startsAt, endsAt }, b));
+    out.push({ ...it, startsAt, endsAt, clash: hit ? hit.title : null });
+  }
+  return { items: out, dropped };
+}

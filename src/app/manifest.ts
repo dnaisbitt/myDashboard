@@ -17,5 +17,11 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
     shortcuts: [{ name: "Capture", url: "/?capture=1" }],
+    // Android: long-press a message in WhatsApp (or any app) → Share → LifeOS.
+    share_target: {
+      action: "/share",
+      method: "GET",
+      params: { title: "title", text: "text", url: "url" },
+    },
   };
 }

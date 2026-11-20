@@ -38,7 +38,9 @@ export async function updateSession(request: NextRequest) {
   if (!signedIn && !isPublic && !path.startsWith("/api/")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.search = path === "/" ? "" : `?next=${encodeURIComponent(path)}`;
+    // Keep the query string too (e.g. text shared into /share) so nothing is lost at sign-in.
+    const target = path + request.nextUrl.search;
+    url.search = target === "/" ? "" : `?next=${encodeURIComponent(target)}`;
     return NextResponse.redirect(url);
   }
   if (signedIn && path === "/login") {
