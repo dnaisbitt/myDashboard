@@ -2,9 +2,9 @@
 // It prints env lines to YOUR terminal only. Paste them into Vercel (and .env.local
 // for local testing). Never commit them or paste them into chats.
 import { randomBytes } from "node:crypto";
-import webpush from "web-push";
+import { generateVAPIDKeys } from "web-push";
 
-const vapid = webpush.generateVAPIDKeys();
+const vapid = generateVAPIDKeys();
 const cron = randomBytes(32).toString("hex");
 
 console.log(`
