@@ -198,7 +198,7 @@ test("wake plan: 15 minutes earlier each week until the target", () => {
   assert.equal(end.done, true);
 });
 
-import { computeBudget, detectDelimiter, formatGBP, guessMapping, mapRows, occurrences, parseAmount, parseBankAmount, parseBankDate, parseCsv, weeklySpend } from "../src/lib/money";
+import { computeBudget, decodeCsvBytes, detectDelimiter, formatGBP, guessMapping, mapRows, occurrences, parseAmount, parseBankAmount, parseBankDate, parseCsv, weeklySpend } from "../src/lib/money";
 import { bedClock, bedMinutes, sleepChain, weekLoad } from "../src/lib/body";
 import { busyEvening, planWeek, shoppingFromPlan, type Recipe } from "../src/lib/meals";
 
@@ -517,4 +517,32 @@ test("csv: the user's bank export (£ inside signed amounts, tab or semicolon, +
     assert.equal(skipped, 0);
     assert.deepEqual(out.map((r) => r.amountPence), [1020, 500, -300000]);
   }
+});
+
+
+
+test("csv: Windows-1252 bank files (one-byte pound sign) decode and import; broken pound signs never block a row", () => {
+  // The user's rows saved as Windows-1252: the pound sign is the single byte 0xA3, which is invalid UTF-8.
+  const text = "Date;Type;Merchant/Description;Debit/Credit;Balance;\r\n22/10/2026;CARD PAYMENT;SHOP A;-£10.20;+£6572.59;\r\n";
+  const bytes = Uint8Array.from([...text].map((c) => c.charCodeAt(0)));
+  const decoded = decodeCsvBytes(bytes.buffer);
+  assert.equal(decoded.encoding, "Windows-1252");
+  const rows = parseCsv(decoded.text);
+  const r = mapRows(rows.slice(1), guessMapping(rows[0], rows.slice(1))!);
+  assert.equal(r.skipped, 0);
+  assert.equal(r.rows[0].amountPence, 1020);
+  // If something upstream still mangles the pound sign, amounts survive.
+  assert.equal(parseBankAmount("-�10.20")?.pence, -1020);
+  assert.equal(parseBankAmount("-Â£10.20")?.pence, -1020);
+  // UTF-8 with a BOM stays UTF-8.
+  assert.equal(decodeCsvBytes(new TextEncoder().encode("﻿Date,Amount").buffer as ArrayBuffer).encoding, "UTF-8");
+});
+
+test("csv: skipped rows say why", () => {
+  const rows = parseCsv("Date,Description,Amount\nyesterday,Shop,-1.00\n22/10/2026,Shop,abc\n");
+  const r = mapRows(rows.slice(1), guessMapping(rows[0], rows.slice(1))!);
+  assert.equal(r.skipped, 2);
+  assert.match(r.reasons[0].reason, /date “yesterday”/);
+  assert.match(r.reasons[1].reason, /amount “abc”/);
+  assert.equal(r.reasons[1].line, 3);
 });

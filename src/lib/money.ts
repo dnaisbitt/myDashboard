@@ -144,6 +144,19 @@ export function byCategory(txns: Txn[]) {
 // CSV import (bank exports)
 // ---------------------------------------------------------------------------
 
+/** File bytes → text. Banks often export Windows-1252 (where "£" is one byte), not UTF-8. */
+export function decodeCsvBytes(buf: ArrayBuffer): { text: string; encoding: string } {
+  const b = new Uint8Array(buf);
+  if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return { text: new TextDecoder("utf-8").decode(b.subarray(3)), encoding: "UTF-8" };
+  if (b[0] === 0xff && b[1] === 0xfe) return { text: new TextDecoder("utf-16le").decode(b.subarray(2)), encoding: "UTF-16" };
+  if (b[0] === 0xfe && b[1] === 0xff) return { text: new TextDecoder("utf-16be").decode(b.subarray(2)), encoding: "UTF-16" };
+  try {
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(b), encoding: "UTF-8" };
+  } catch {
+    return { text: new TextDecoder("windows-1252").decode(b), encoding: "Windows-1252" };
+  }
+}
+
 /** Which character separates columns: comma, semicolon, tab or pipe (counted outside quotes). */
 export function detectDelimiter(text: string): "," | ";" | "\t" | "|" {
   const line = text.replace(/^﻿/, "").split(/\r?\n/).find((l) => l.trim()) ?? "";
@@ -217,7 +230,7 @@ export function parseBankAmount(input: string): { pence: number; signed: boolean
     if (suffix[1].toUpperCase() === "DR") negative = true;
     s = s.slice(0, suffix.index).trim();
   }
-  s = s.replace(/GBP|EUR|USD|£|€|\$/gi, "").replace(/\s/g, "");
+  s = s.replace(/GBP|EUR|USD/gi, "").replace(/[^\d.,+\-\u2212\u2013]/g, "");
   if (/^[-−–]/.test(s) || /-$/.test(s)) {
     negative = true;
     signed = true;
@@ -346,11 +359,17 @@ export function guessMapping(header: string[], sample: string[][] = []): CsvMapp
 }
 
 /** Apply a mapping. Rows that don't parse are counted as skipped, never guessed. Positive result = money out. */
-export function mapRows(rows: string[][], m: CsvMapping): { rows: ImportRow[]; skipped: number } {
+export function mapRows(
+  rows: string[][],
+  m: CsvMapping,
+): { rows: ImportRow[]; skipped: number; reasons: Array<{ line: number; reason: string }> } {
   const out: ImportRow[] = [];
   const seen = new Map<string, number>();
+  const reasons: Array<{ line: number; reason: string }> = [];
   let skipped = 0;
+  let line = 1;
   for (const r of rows) {
+    line++;
     const occurredOn = parseBankDate(r[m.date] ?? "");
     const description = (r[m.description] ?? "").slice(0, 200);
     let pence: number | null = null;
@@ -369,6 +388,17 @@ export function mapRows(rows: string[][], m: CsvMapping): { rows: ImportRow[]; s
     }
     if (!occurredOn || pence === null || pence === 0) {
       skipped++;
+      if (reasons.length < 3) {
+        const amountText = m.amount !== undefined ? r[m.amount] : (r[m.moneyOut ?? -1] || r[m.moneyIn ?? -1]);
+        reasons.push({
+          line,
+          reason: !occurredOn
+            ? `date “${(r[m.date] ?? "").slice(0, 30)}” isn't a date it recognises`
+            : pence === 0
+              ? "amount is zero"
+              : `amount “${(amountText ?? "").slice(0, 30)}” couldn't be read`,
+        });
+      }
       continue;
     }
     const base = `${occurredOn}|${pence}|${description.toLowerCase().replace(/\s+/g, " ")}`;
@@ -382,5 +412,5 @@ export function mapRows(rows: string[][], m: CsvMapping): { rows: ImportRow[]; s
       importKey: `${base}#${n}`,
     });
   }
-  return { rows: out, skipped };
+  return { rows: out, skipped, reasons };
 }

@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
 import { SectionHeader } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
-import { DELIMITER_NAME, detectDelimiter, formatGBP, guessMapping, mapRows, parseCsv, type CsvMapping } from "@/lib/money";
+import { decodeCsvBytes, DELIMITER_NAME, detectDelimiter, formatGBP, guessMapping, mapRows, parseCsv, type CsvMapping } from "@/lib/money";
 import { keyLabel } from "@/lib/time";
 
 /** Bank CSV import: parsed in the browser, previewed, then saved. Duplicates are skipped. */
 export function CsvImport() {
   const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<{ name: string; rows: string[][]; delimiter: string } | null>(null);
+  const [file, setFile] = useState<{ name: string; rows: string[][]; delimiter: string; encoding: string } | null>(null);
   const [mapping, setMapping] = useState<CsvMapping | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -59,12 +59,12 @@ export function CsvImport() {
             e.target.value = "";
             if (!f) return;
             if (f.size > 3_000_000) return setError("That file is over 3 MB. Export a shorter date range.");
-            const text = await f.text();
+            const { text, encoding } = decodeCsvBytes(await f.arrayBuffer());
             const delimiter = detectDelimiter(text);
             const rows = parseCsv(text, delimiter);
             if (rows.length < 2) return setError("That file has no rows.");
             const guess = guessMapping(rows[0], rows.slice(1, 61));
-            setFile({ name: f.name, rows, delimiter });
+            setFile({ name: f.name, rows, delimiter, encoding });
             setMapping(guess ?? { date: 0, description: 1, amount: 2, outIsNegative: true });
             if (!guess) setError("Couldn't tell which columns are which. Pick them below.");
           }}
@@ -79,7 +79,7 @@ export function CsvImport() {
 
       {file && mapping ? (
         <section className="flex flex-col gap-5">
-          <SectionHeader title={file.name} count={`${file.rows.length - 1} rows · ${DELIMITER_NAME[file.delimiter] ?? "comma"}-separated`} />
+          <SectionHeader title={file.name} count={`${file.rows.length - 1} rows · ${DELIMITER_NAME[file.delimiter] ?? "comma"}-separated · ${file.encoding}`} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {col("Date", mapping.date, (v) => setMapping({ ...mapping, date: v ?? 0 }))}
             {col("Description", mapping.description, (v) => setMapping({ ...mapping, description: v ?? 0 }))}
@@ -112,6 +112,15 @@ export function CsvImport() {
                 <span className="font-medium">{mapped.rows.length} transactions</span>: {formatGBP(out)} out, {formatGBP(inn)} in
                 {mapped.skipped ? <span className="text-ink-2"> · {mapped.skipped} rows couldn&apos;t be read and will be skipped</span> : null}
               </p>
+              {mapped.reasons.length ? (
+                <ul className="-mt-2 list-disc pl-5 text-small text-ink-2">
+                  {mapped.reasons.map((r) => (
+                    <li key={r.line}>
+                      Line {r.line}: {r.reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="overflow-x-auto rounded-md border border-rule">
                 <table className="w-full text-small">
                   <thead className="bg-surface text-left text-ink-2">
