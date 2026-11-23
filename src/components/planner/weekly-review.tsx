@@ -108,7 +108,6 @@ export function WeeklyReview({ r }: { r: Review }) {
                 </li>
               ))}
             </ul>
-            <p className="text-micro text-ink-3">Open each one: give it a new day, or archive it if it no longer matters.</p>
           </div>
         ) : null}
       </section>

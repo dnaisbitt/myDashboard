@@ -66,7 +66,7 @@ function GoalForm({ goal, onClose }: { goal?: Goal; onClose: () => void }) {
         });
       }}
     >
-      <Field label="Goal">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required autoFocus placeholder="Get a first" />}</Field>
+      <Field label="Goal">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} required autoFocus />}</Field>
       <Field label="What does done look like?" hint="A target you could check, e.g. “70%+ average across modules”.">
         {(id, d) => <Input id={id} aria-describedby={d} value={target} onChange={(e) => setTarget(e.target.value)} maxLength={300} />}
       </Field>

@@ -42,8 +42,7 @@ export function CsvImport() {
   return (
     <div className="flex flex-col gap-8">
       <p className="max-w-[62ch] text-body text-ink-2">
-        Download a CSV statement from your banking app or website and choose it here. Nothing leaves your browser until you press Import, and
-        rows you&apos;ve imported before are skipped.
+        Nothing leaves your browser until you press Import. Rows you&apos;ve imported before are skipped.
       </p>
       <div>
         <input

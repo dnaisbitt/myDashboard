@@ -95,7 +95,7 @@ export function TermPlan({ periods, period, items, todayKey }: { periods: Budget
             ))}
           </ul>
         ) : (
-          <p className="text-small text-ink-2">Start with the term you&apos;re in now.</p>
+          <p className="text-small text-ink-2">No terms yet.</p>
         )}
       </section>
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
@@ -142,7 +142,7 @@ function PeriodForm({ period, onClose, todayKey }: { period?: BudgetPeriod; onCl
         });
       }}
     >
-      <Field label="Name">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Autumn term" maxLength={80} required autoFocus />}</Field>
+      <Field label="Name">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required autoFocus />}</Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Starts">{(id) => <Input id={id} type="date" value={start} onChange={(e) => setStart(e.target.value)} required />}</Field>
         <Field label="Ends" hint="Until the next instalment">
@@ -219,7 +219,7 @@ function ItemForm({ item, kind, onClose, todayKey }: { item?: PlanItem; kind: Pl
         });
       }}
     >
-      <Field label="What">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required placeholder={kind === "income" ? "" : "Rent"} />}</Field>
+      <Field label="What">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required />}</Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Amount (£)">{(id) => <Input id={id} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required />}</Field>
         <Field label="How often">

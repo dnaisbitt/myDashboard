@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from "react";
 import { deleteRecipe, saveRecipe } from "@/app/actions/food";
 import { Button, IconButton } from "@/components/ui/button";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
@@ -10,10 +10,12 @@ import { EmptyState } from "@/components/ui/misc";
 import { Chip, ViewTabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { RECIPE_STATUS_LABEL, type Ingredient, type Recipe } from "@/lib/meals";
+import { RecipeView } from "./recipe-view";
 
 type Filter = "all" | Recipe["status"] | "quick";
 
 export function Recipes({ recipes }: { recipes: Recipe[] }) {
+  const [viewing, setViewing] = useState<Recipe | null>(null);
   const [editing, setEditing] = useState<Recipe | "new" | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const shown = recipes.filter((r) => (filter === "all" ? true : filter === "quick" ? (r.minutes ?? 99) <= 20 : r.status === filter));
@@ -40,8 +42,7 @@ export function Recipes({ recipes }: { recipes: Recipe[] }) {
       </div>
       {!recipes.length ? (
         <EmptyState
-          title="Your recipe library is empty"
-          body="Add your two staples (lean mince bolognese with pasta, and the gnocchi) and anything you want to try. Ingredients feed the shopping list."
+          title="No recipes yet"
           action={
             <Button size="sm" onClick={() => setEditing("new")}>
               Add a recipe
@@ -52,14 +53,13 @@ export function Recipes({ recipes }: { recipes: Recipe[] }) {
         <ul className="flex flex-col divide-y divide-rule border-y border-rule">
           {shown.map((r) => (
             <li key={r.id}>
-              <button type="button" onClick={() => setEditing(r)} className="flex min-h-12 w-full flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-left hover:bg-sunken/40">
+              <button type="button" onClick={() => setViewing(r)} className="flex min-h-12 w-full flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-left hover:bg-sunken/40">
                 <span className="min-w-0 flex-1 font-medium">{r.title}</span>
                 <Chip>{RECIPE_STATUS_LABEL[r.status]}</Chip>
                 <span className="text-small text-ink-2">
                   {r.portions} portion{r.portions === 1 ? "" : "s"}
                   {r.minutes ? ` · ${r.minutes} min` : ""}
                   {r.protein_g ? ` · ${r.protein_g}g protein` : ""}
-                  {r.ingredients.length ? ` · ${r.ingredients.length} ingredients` : ""}
                 </span>
               </button>
             </li>
@@ -68,19 +68,30 @@ export function Recipes({ recipes }: { recipes: Recipe[] }) {
       ) : (
         <p className="text-small text-ink-2">Nothing in this filter.</p>
       )}
+      <RecipeView
+        recipe={viewing}
+        onClose={() => setViewing(null)}
+        onEdit={(r) => {
+          setViewing(null);
+          setEditing(r);
+        }}
+      />
       <RecipeDialog value={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }
 
-function RecipeDialog({ value, onClose }: { value: Recipe | "new" | null; onClose: () => void }) {
+export function RecipeDialog({ value, onClose }: { value: Recipe | "new" | null; onClose: () => void }) {
   const r = value && value !== "new" ? value : undefined;
   return (
-    <Dialog open={value !== null} onClose={onClose} title={r ? "Recipe" : "New recipe"}>
+    <Dialog open={value !== null} onClose={onClose} title={r ? "Edit recipe" : "New recipe"}>
       {value !== null ? <RecipeForm key={r?.id ?? "new"} recipe={r} onClose={onClose} /> : null}
     </Dialog>
   );
 }
+
+const FIELDS = ["name", "qty", "unit"] as const;
+const blank = (): Ingredient => ({ name: "", qty: "", unit: "" });
 
 function RecipeForm({ recipe, onClose }: { recipe?: Recipe; onClose: () => void }) {
   const [title, setTitle] = useState(recipe?.title ?? "");
@@ -88,13 +99,56 @@ function RecipeForm({ recipe, onClose }: { recipe?: Recipe; onClose: () => void 
   const [portions, setPortions] = useState(recipe?.portions ?? 2);
   const [minutes, setMinutes] = useState(recipe?.minutes ? String(recipe.minutes) : "");
   const [protein, setProtein] = useState(recipe?.protein_g ? String(recipe.protein_g) : "");
-  const [ings, setIngs] = useState<Ingredient[]>(recipe?.ingredients.length ? recipe.ingredients : [{ name: "", qty: "", unit: "" }]);
+  const [ings, setIngs] = useState<Ingredient[]>(recipe?.ingredients.length ? recipe.ingredients : [blank()]);
   const [method, setMethod] = useState(recipe?.method ?? "");
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [pending, start] = useTransition();
   const { notify } = useToast();
+  const cells = useRef<Array<Array<HTMLInputElement | null>>>([]);
+  const focusAfter = useRef<[number, number] | null>(null);
   const setIng = (i: number, patch: Partial<Ingredient>) => setIngs(ings.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+
+  // Focus a cell once a newly added row has rendered.
+  useEffect(() => {
+    if (!focusAfter.current) return;
+    cells.current[focusAfter.current[0]]?.[focusAfter.current[1]]?.focus();
+    focusAfter.current = null;
+  }, [ings.length]);
+
+  const focusCell = (row: number, col: number, caret: "start" | "end") => {
+    const el = cells.current[row]?.[col];
+    if (!el) return false;
+    el.focus();
+    const pos = caret === "start" ? 0 : el.value.length;
+    el.setSelectionRange(pos, pos);
+    return true;
+  };
+
+  /** Enter: finish this ingredient and start the next. →/← at the edge of a box: move between boxes. */
+  const onCellKey = (row: number, col: number) => (e: KeyboardEvent<HTMLInputElement>) => {
+    const el = e.currentTarget;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (row < ings.length - 1) focusCell(row + 1, 0, "end");
+      else if (ings[row].name.trim()) {
+        setIngs([...ings, blank()]);
+        focusAfter.current = [row + 1, 0];
+      }
+      return;
+    }
+    const atEnd = el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+    const atStart = el.selectionStart === 0 && el.selectionEnd === 0;
+    if (e.key === "ArrowRight" && atEnd) {
+      const moved = col < FIELDS.length - 1 ? focusCell(row, col + 1, "start") : focusCell(row + 1, 0, "start");
+      if (moved) e.preventDefault();
+    } else if (e.key === "ArrowLeft" && atStart) {
+      const moved = col > 0 ? focusCell(row, col - 1, "end") : focusCell(row - 1, FIELDS.length - 1, "end");
+      if (moved) e.preventDefault();
+    }
+  };
+
+  const cell = "h-9 rounded-sm border border-rule bg-surface px-2 text-small focus:border-ink focus:outline-none";
 
   return (
     <form
@@ -118,7 +172,7 @@ function RecipeForm({ recipe, onClose }: { recipe?: Recipe; onClose: () => void 
         });
       }}
     >
-      <Field label="Name">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus placeholder="Lean mince bolognese" />}</Field>
+      <Field label="Name">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus />}</Field>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Status">
           {(id) => (
@@ -135,25 +189,49 @@ function RecipeForm({ recipe, onClose }: { recipe?: Recipe; onClose: () => void 
           {(id, d) => <Input id={id} aria-describedby={d} type="number" min={1} max={12} value={portions} onChange={(e) => setPortions(Math.max(1, Math.min(12, Number(e.target.value) || 1)))} />}
         </Field>
         <Field label="Minutes">{(id) => <Input id={id} inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ""))} />}</Field>
-        <Field label="Protein (g)">{(id) => <Input id={id} inputMode="numeric" value={protein} onChange={(e) => setProtein(e.target.value.replace(/\D/g, ""))} placeholder="whole batch" />}</Field>
+        <Field label="Protein (g)">{(id) => <Input id={id} inputMode="numeric" value={protein} onChange={(e) => setProtein(e.target.value.replace(/\D/g, ""))} />}</Field>
       </div>
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1.5 text-small font-medium">Ingredients (whole batch)</legend>
+        <legend className="mb-1.5 text-small font-medium">Ingredients</legend>
+        <div className="grid grid-cols-[1fr_72px_72px_28px] gap-2 text-micro text-ink-2" aria-hidden>
+          <span>Ingredient</span>
+          <span>Amount</span>
+          <span>Unit</span>
+        </div>
         {ings.map((ing, i) => (
           <div key={i} className="grid grid-cols-[1fr_72px_72px_28px] gap-2">
-            <input aria-label="Ingredient" value={ing.name} onChange={(e) => setIng(i, { name: e.target.value })} maxLength={80} placeholder="Lean mince" className="h-9 rounded-sm border border-rule bg-surface px-2 text-small focus:border-ink focus:outline-none" />
-            <input aria-label="Quantity" value={ing.qty} onChange={(e) => setIng(i, { qty: e.target.value })} maxLength={20} placeholder="500" className="h-9 rounded-sm border border-rule bg-surface px-2 text-small focus:border-ink focus:outline-none" />
-            <input aria-label="Unit" value={ing.unit} onChange={(e) => setIng(i, { unit: e.target.value })} maxLength={20} placeholder="g" className="h-9 rounded-sm border border-rule bg-surface px-2 text-small focus:border-ink focus:outline-none" />
-            <IconButton label="Remove ingredient" size="sm" className="self-center" onClick={() => setIngs(ings.length > 1 ? ings.filter((_, j) => j !== i) : [{ name: "", qty: "", unit: "" }])}>
+            {FIELDS.map((f, j) => (
+              <input
+                key={f}
+                ref={(el) => {
+                  (cells.current[i] ??= [])[j] = el;
+                }}
+                aria-label={`${f === "name" ? "Ingredient" : f === "qty" ? "Amount" : "Unit"} ${i + 1}`}
+                value={ing[f]}
+                onChange={(e) => setIng(i, { [f]: e.target.value })}
+                onKeyDown={onCellKey(i, j)}
+                maxLength={f === "name" ? 80 : 20}
+                enterKeyHint="next"
+                className={cell}
+              />
+            ))}
+            <IconButton
+              label={`Remove ingredient ${i + 1}`}
+              size="sm"
+              className="self-center"
+              onClick={() => setIngs(ings.length > 1 ? ings.filter((_, j) => j !== i) : [blank()])}
+            >
               <X size={13} aria-hidden />
             </IconButton>
           </div>
         ))}
-        <button type="button" onClick={() => setIngs([...ings, { name: "", qty: "", unit: "" }])} className="self-start text-small text-ink-2 underline underline-offset-4 hover:text-ink">
+        <button type="button" onClick={() => setIngs([...ings, blank()])} className="self-start text-small text-ink-2 underline underline-offset-4 hover:text-ink">
           Add ingredient
         </button>
       </fieldset>
-      <Field label="Method">{(id) => <Textarea id={id} value={method} onChange={(e) => setMethod(e.target.value)} maxLength={10000} placeholder="Short steps" />}</Field>
+      <Field label="Method" hint="One step per line.">
+        {(id, d) => <Textarea id={id} aria-describedby={d} value={method} onChange={(e) => setMethod(e.target.value)} maxLength={10000} className="min-h-32" />}
+      </Field>
       {error ? <p className="text-small text-danger">{error}</p> : null}
       <div className="flex items-center gap-2 border-t border-rule pt-4">
         {recipe ? (
@@ -186,4 +264,3 @@ function RecipeForm({ recipe, onClose }: { recipe?: Recipe; onClose: () => void 
     </form>
   );
 }
-

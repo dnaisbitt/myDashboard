@@ -82,7 +82,7 @@ export function SettingsForm({
           }}
         >
           <Field label="Name">
-            {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} placeholder="What should Today call you?" />}
+            {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />}
           </Field>
           <Field label="Time zone" hint="IANA name, e.g. Europe/London. Keep this when travelling unless you move.">
             {(id, d) => <Input id={id} aria-describedby={d} value={timezone} onChange={(e) => setTimezone(e.target.value)} />}

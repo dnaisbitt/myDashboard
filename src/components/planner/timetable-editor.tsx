@@ -151,7 +151,7 @@ function SessionForm({ session, weekday, todayKey, onClose }: { session?: Timeta
         });
       }}
     >
-      <Field label="Name">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus placeholder="Machine Learning" />}</Field>
+      <Field label="Name">{(id) => <Input id={id} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus />}</Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Type">
           {(id) => (

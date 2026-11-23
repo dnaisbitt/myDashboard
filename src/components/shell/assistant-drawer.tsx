@@ -184,7 +184,7 @@ function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
           <PlanPanel key={mode} scope={mode === "plan-day" ? "day" : "week"} tz={tz} onDone={() => setMode("chat")} onSpent={loadStatus} />
         ) : msgs.length === 0 ? (
           <div className="flex flex-col gap-3">
-            <p className="text-small text-ink-2">Ask anything about your plans, or start with one of these. It reads your current tasks, schedule, habits, goals and money each time, and only suggests.</p>
+            <p className="text-small text-ink-2">It reads your tasks, schedule, habits, goals and money each time you ask, and only suggests.</p>
             <div className="flex flex-col items-start gap-1.5">
               {(
                 [
@@ -369,7 +369,6 @@ function Breakdown({ tz, onDone, onSpent }: { tz: string; onDone: () => void; on
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 maxLength={1000}
-                placeholder="e.g. tutoring first-years in Python as a side hustle"
                 className="min-h-20 rounded-sm border border-rule bg-canvas p-2.5 text-body placeholder:text-ink-3 focus:border-ink focus:outline-none"
               />
             </label>
@@ -618,7 +617,6 @@ function PlanPanel({ scope, tz, onDone, onSpent }: { scope: "day" | "week"; tz: 
               Add {picked.size} to schedule
             </Button>
           </div>
-          <p className="text-micro text-ink-3">Added blocks are normal blocks: edit or delete them on Today or in the Planner.</p>
         </>
       ) : null}
     </div>

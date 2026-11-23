@@ -75,7 +75,7 @@ export function Briefing({
         </div>
       ) : (
         <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-rule px-4 py-4">
-          <p className="text-small text-ink-2">A short read of today from your own data: the one thing that matters, what&apos;s fixed, and what to put in the drift window.</p>
+          <p className="text-small text-ink-2">A short read of today from your own data.</p>
           <Button size="sm" variant="secondary" pending={loading} onClick={write}>
             <Sparkles size={14} aria-hidden />
             Write today&apos;s briefing

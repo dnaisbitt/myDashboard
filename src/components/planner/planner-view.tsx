@@ -537,7 +537,7 @@ function DayAgenda({
             ))}
           </ul>
         ) : (
-          <p className="text-small text-ink-2">Nothing due or planned. Give a task a “do it on” day, or drag it here in week view.</p>
+          <p className="text-small text-ink-2">Nothing due or planned. In week view you can drag tasks onto a day.</p>
         )}
         <p className="mt-2 text-small text-ink-2">
           Committed {durationLabel(load.committedMinutes)} · focus {durationLabel(load.focusMinutes)}

@@ -100,12 +100,11 @@ export function Training({
               );
             })}
           </ol>
-          <p className="text-micro text-ink-3">Dashed = planned gym · filled = done. Training and matches come from your timetable.</p>
+          <p className="text-micro text-ink-3">Dashed = planned · filled = done.</p>
         </div>
         <div className="flex flex-col gap-4">
           <SectionHeader title="Today" />
           <WorkoutButtons todayKey={todayKey} current={todayWorkout?.kind ?? null} />
-          <p className="text-small text-ink-2">The minimum version (about 30 minutes, any session) still counts. Tired days are when it matters most.</p>
           {upcomingGym.length ? (
             <div className="mt-2 flex flex-col gap-2">
               <SectionHeader title="Book your slot" />
@@ -311,7 +310,7 @@ function GymSettings({ profile }: { profile: Profile }) {
           )}
         </Field>
         <Field label="Quieter times you've noticed">
-          {(id) => <Textarea id={id} value={quiet} onChange={(e) => setQuiet(e.target.value)} maxLength={300} className="min-h-10" placeholder="Weekdays before 8am; Friday afternoons" />}
+          {(id) => <Textarea id={id} value={quiet} onChange={(e) => setQuiet(e.target.value)} maxLength={300} className="min-h-10" />}
         </Field>
         <Button type="submit" pending={pending}>
           Save

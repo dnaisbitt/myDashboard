@@ -53,7 +53,6 @@ export function Sleep({
         <div className="flex flex-col gap-4">
           <SectionHeader title="Log it now" />
           <QuickSleep />
-          <p className="text-small text-ink-2">One tap when you get into bed and when you get up. Fix any night below if you forget.</p>
           <BedtimeTarget profile={profile} />
         </div>
         <div className="flex flex-col gap-4">

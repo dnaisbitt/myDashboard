@@ -132,7 +132,7 @@ export function ProjectDetail({
             });
           }}
           maxLength={20000}
-          placeholder="Ideas, links, decisions. Saves when you click away."
+          placeholder="Notes · saves when you click away"
           className="min-h-40 w-full rounded-md border border-rule bg-surface p-3 text-body leading-relaxed placeholder:text-ink-3 focus:border-ink focus:outline-none"
         />
       </section>

@@ -100,7 +100,6 @@ function EventForm({ draft, onClose, tz }: { draft: EventDraft; onClose: () => v
             aria-describedby={d}
             value={title}
             onChange={(ev) => setTitle(ev.target.value)}
-            placeholder={isFocus ? "10 past-paper questions, Ch. 4" : "Dentist"}
             maxLength={200}
             required
             autoFocus

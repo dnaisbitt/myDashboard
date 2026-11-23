@@ -175,7 +175,7 @@ export function MoneyOverview({
             ))}
           </ul>
         ) : (
-          <p className="text-small text-ink-2">Nothing logged yet. Every spend you log moves the number above.</p>
+          <p className="text-small text-ink-2">Nothing logged yet.</p>
         )}
       </section>
 
@@ -306,7 +306,7 @@ function Savings({ savings, goals }: { savings: SavingsGoal[]; goals: Array<{ id
           ))}
         </ul>
       ) : (
-        <p className="text-small text-ink-2">Saving for a trip, a laptop, a buffer? Add a target and update it when you move money across.</p>
+        <p className="text-small text-ink-2">No savings goals yet.</p>
       )}
       <SavingsDialog open={editing !== null} goal={editing && editing !== "new" ? editing : undefined} goals={goals} onClose={() => setEditing(null)} />
     </section>

@@ -17,6 +17,7 @@ import type { Block } from "@/lib/schedule";
 import { addDaysToKey, keyLabel } from "@/lib/time";
 import type { Profile } from "@/lib/types";
 import { FoodCheckins } from "./checkins";
+import { RecipeView } from "./recipe-view";
 
 export function Meals({
   profile,
@@ -64,7 +65,7 @@ export function Meals({
         {!recipes.length ? (
           <EmptyState
             title="Add a couple of staples first"
-            body="Start with your bolognese and the gnocchi recipe. Cooking 2 portions means tonight's dinner becomes tomorrow's lunch automatically."
+            body="Cooking 2 portions makes tonight's dinner tomorrow's lunch automatically."
             action={
               <Link href="/body/recipes" className="inline-flex h-8 items-center rounded-sm bg-ink px-3 text-small font-medium text-canvas">
                 Add recipes
@@ -77,20 +78,12 @@ export function Meals({
             <DayRow key={d.dateKey} day={d} recipes={recipes} isToday={d.dateKey === todayKey} past={d.dateKey < todayKey} />
           ))}
         </ol>
-        <p className="text-micro text-ink-3">Busy evenings come from your timetable and blocks (anything fixed between 17:30 and 20:30).</p>
       </section>
 
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
         <section className="flex flex-col gap-2">
           <SectionHeader title="Today" />
           <FoodCheckins profile={profile} today={today} todayKey={todayKey} />
-          <p className="text-micro text-ink-3">
-            Calorie and protein tracking are off unless you switch them on in{" "}
-            <Link href="/settings" className="underline underline-offset-2">
-              Settings
-            </Link>
-            .
-          </p>
         </section>
 
         <section className="flex flex-col gap-2">
@@ -125,6 +118,7 @@ function DayRow({ day, recipes, isToday, past }: { day: ReturnType<typeof planWe
   const [pending, start] = useTransition();
   const { notify } = useToast();
   const [note, setNote] = useState(day.dinner?.row.note ?? "");
+  const [viewing, setViewing] = useState<Recipe | null>(null);
   const recipe = day.dinner?.recipe ?? null;
   const ordered = [...recipes].sort(
     (a, b) =>
@@ -170,6 +164,11 @@ function DayRow({ day, recipes, isToday, past }: { day: ReturnType<typeof planWe
               </option>
             ))}
           </select>
+          {recipe ? (
+            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setViewing(recipe)}>
+              View
+            </Button>
+          ) : null}
           {recipe && recipe.status === "want_to_try" && (past || isToday) ? (
             <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => start(async () => void (await markCooked(recipe.id)))}>
               Cooked it
@@ -188,7 +187,7 @@ function DayRow({ day, recipes, isToday, past }: { day: ReturnType<typeof planWe
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => note !== (day.dinner?.row.note ?? "") && set(note.trim() ? { recipeId: null, note } : null)}
               maxLength={120}
-              placeholder="or a note: “eggs on toast”, “out with the team”"
+              placeholder="Or add a note"
               aria-label={`Dinner note for ${keyLabel(day.dateKey)}`}
               className="h-8 w-full border-b border-rule bg-transparent text-small placeholder:text-ink-3 focus:border-ink focus:outline-none"
             />
@@ -203,12 +202,17 @@ function DayRow({ day, recipes, isToday, past }: { day: ReturnType<typeof planWe
       <div className="text-small">
         {day.lunch ? (
           <p>
-            <span className="text-ink-2">Lunch:</span> {day.lunch.recipe.title} <span className="text-ink-2">(leftovers)</span>
+            <span className="text-ink-2">Lunch:</span>{" "}
+            <button type="button" onClick={() => setViewing(day.lunch!.recipe)} className="underline decoration-rule underline-offset-4 hover:decoration-ink">
+              {day.lunch.recipe.title}
+            </button>{" "}
+            <span className="text-ink-2">(leftovers)</span>
           </p>
         ) : (
           <p className="text-ink-3">Lunch: nothing cooked the night before</p>
         )}
       </div>
+      <RecipeView recipe={viewing} onClose={() => setViewing(null)} />
     </li>
   );
 }

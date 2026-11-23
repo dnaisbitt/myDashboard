@@ -135,7 +135,6 @@ function TaskForm({ task, onClose, tz }: { task: Task; onClose: () => void; tz: 
             onChange={(e) => setNotes(e.target.value)}
             maxLength={5000}
             className="min-h-20"
-            placeholder="Details, links, the first concrete step…"
           />
         )}
       </Field>
@@ -184,7 +183,7 @@ function TaskForm({ task, onClose, tz }: { task: Task; onClose: () => void; tz: 
               <Field label="Category">
                 {(id) => (
                   <>
-                    <Input id={id} list={`${id}-list`} value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} placeholder="Uni, Shopping…" />
+                    <Input id={id} list={`${id}-list`} value={category} onChange={(e) => setCategory(e.target.value)} maxLength={40} />
                     <datalist id={`${id}-list`}>
                       {options?.categories.map((c) => <option key={c} value={c} />)}
                     </datalist>
