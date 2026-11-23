@@ -198,7 +198,7 @@ test("wake plan: 15 minutes earlier each week until the target", () => {
   assert.equal(end.done, true);
 });
 
-import { computeBudget, formatGBP, guessMapping, mapRows, occurrences, parseAmount, parseBankDate, parseCsv, weeklySpend } from "../src/lib/money";
+import { computeBudget, detectDelimiter, formatGBP, guessMapping, mapRows, occurrences, parseAmount, parseBankAmount, parseBankDate, parseCsv, weeklySpend } from "../src/lib/money";
 import { bedClock, bedMinutes, sleepChain, weekLoad } from "../src/lib/body";
 import { busyEvening, planWeek, shoppingFromPlan, type Recipe } from "../src/lib/meals";
 
@@ -456,4 +456,50 @@ test("learning: spots evening-vs-morning response and offers to move or switch o
   assert.ok(s.suggestions.some((x) => x.change.type === "deadlines" && x.change.at === "19:00"));
   assert.ok(s.suggestions.some((x) => x.change.type === "deadlines" && x.change.on === false));
   assert.ok(s.sentences.some((x) => /Habits not logged yet.*works/.test(x)));
+});
+
+
+test("csv: semicolon file with a single Debit/Credit column and decimal commas (the reported bank format)", () => {
+  const text = "Date;Type;Merchant/Description;Debit/Credit;Balance;\r\n23/11/2026;Card payment;TESCO STORES 2345;-12,40;1.234,56;\r\n22/11/2026;Faster payment;Student Finance;3.000,00;1.246,96;\r\n21/11/2026;Direct debit;GIFFGAFF;-10,00;-1.753,04;\r\n";
+  assert.equal(detectDelimiter(text), ";");
+  const rows = parseCsv(text);
+  assert.deepEqual(rows[0], ["Date", "Type", "Merchant/Description", "Debit/Credit", "Balance"], "trailing empty column dropped");
+  const m = guessMapping(rows[0], rows.slice(1))!;
+  assert.equal(m.amount, 3, "Debit/Credit is the signed amount column, not 'money out'");
+  assert.equal(m.description, 2);
+  assert.equal(m.type, undefined, "signed amounts: Type isn't needed (and 'Faster payment' would mislead it)");
+  const { rows: out, skipped } = mapRows(rows.slice(1), m);
+  assert.equal(skipped, 0);
+  assert.deepEqual(out.map((r) => r.amountPence), [1240, -300000, 1000]);
+  assert.equal(out[0].category, "Groceries");
+});
+
+test("csv: unsigned amounts take their direction from the Type column", () => {
+  const rows = parseCsv("Date,Type,Description,Amount\n18/11/2026,DEBIT,Greggs,3.10\n18/11/2026,CREDIT,Refund,5.00\n");
+  const { rows: out } = mapRows(rows.slice(1), guessMapping(rows[0], rows.slice(1))!);
+  assert.deepEqual(out.map((r) => r.amountPence), [310, -500]);
+});
+
+test("csv: all-positive amounts with no Type column are treated as spending; tab-separated files work", () => {
+  const text = "Date\tDescription\tAmount\n18/11/2026\tPret\t4.20\n";
+  assert.equal(detectDelimiter(text), "\t");
+  const rows = parseCsv(text);
+  const m = guessMapping(rows[0], rows.slice(1))!;
+  assert.equal(m.outIsNegative, false);
+  assert.equal(mapRows(rows.slice(1), m).rows[0].amountPence, 420);
+});
+
+test("amounts: decimal commas, thousands, brackets, DR/CR, currency, typed input", () => {
+  assert.deepEqual(parseBankAmount("-12,40"), { pence: -1240, signed: true });
+  assert.deepEqual(parseBankAmount("1.234,56"), { pence: 123456, signed: false });
+  assert.deepEqual(parseBankAmount("1,234.56"), { pence: 123456, signed: false });
+  assert.deepEqual(parseBankAmount("(12.40)"), { pence: -1240, signed: true });
+  assert.deepEqual(parseBankAmount("12.40 DR"), { pence: -1240, signed: true });
+  assert.deepEqual(parseBankAmount("12.40 CR"), { pence: 1240, signed: true });
+  assert.deepEqual(parseBankAmount("GBP 5"), { pence: 500, signed: false });
+  assert.equal(parseAmount("4,50"), 450);
+  assert.equal(parseAmount("1,204"), 120400);
+  assert.equal(parseBankAmount("abc"), null);
+  assert.equal(parseBankDate("23/11/2026 14:03"), "2026-11-23");
+  assert.equal(parseBankDate("23.11.2026"), "2026-11-23");
 });

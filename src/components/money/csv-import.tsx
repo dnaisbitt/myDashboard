@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
 import { SectionHeader } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
-import { formatGBP, guessMapping, mapRows, parseCsv, type CsvMapping } from "@/lib/money";
+import { DELIMITER_NAME, detectDelimiter, formatGBP, guessMapping, mapRows, parseCsv, type CsvMapping } from "@/lib/money";
 import { keyLabel } from "@/lib/time";
 
 /** Bank CSV import: parsed in the browser, previewed, then saved. Duplicates are skipped. */
 export function CsvImport() {
   const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<{ name: string; rows: string[][] } | null>(null);
+  const [file, setFile] = useState<{ name: string; rows: string[][]; delimiter: string } | null>(null);
   const [mapping, setMapping] = useState<CsvMapping | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -59,10 +59,12 @@ export function CsvImport() {
             e.target.value = "";
             if (!f) return;
             if (f.size > 3_000_000) return setError("That file is over 3 MB. Export a shorter date range.");
-            const rows = parseCsv(await f.text());
+            const text = await f.text();
+            const delimiter = detectDelimiter(text);
+            const rows = parseCsv(text, delimiter);
             if (rows.length < 2) return setError("That file has no rows.");
-            const guess = guessMapping(rows[0]);
-            setFile({ name: f.name, rows });
+            const guess = guessMapping(rows[0], rows.slice(1, 61));
+            setFile({ name: f.name, rows, delimiter });
             setMapping(guess ?? { date: 0, description: 1, amount: 2, outIsNegative: true });
             if (!guess) setError("Couldn't tell which columns are which. Pick them below.");
           }}
@@ -77,8 +79,8 @@ export function CsvImport() {
 
       {file && mapping ? (
         <section className="flex flex-col gap-5">
-          <SectionHeader title={file.name} count={`${file.rows.length - 1} rows`} />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SectionHeader title={file.name} count={`${file.rows.length - 1} rows · ${DELIMITER_NAME[file.delimiter] ?? "comma"}-separated`} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {col("Date", mapping.date, (v) => setMapping({ ...mapping, date: v ?? 0 }))}
             {col("Description", mapping.description, (v) => setMapping({ ...mapping, description: v ?? 0 }))}
             {col("Amount", mapping.amount, (v) => setMapping({ ...mapping, amount: v, ...(v !== undefined ? { moneyOut: undefined, moneyIn: undefined } : {}) }), true)}
@@ -88,6 +90,7 @@ export function CsvImport() {
                 {col("Money in", mapping.moneyIn, (v) => setMapping({ ...mapping, moneyIn: v }), true)}
               </>
             ) : (
+              <>
               <label className="flex flex-col gap-1 text-small">
                 <span className="font-medium">Spending shows as</span>
                 <Select
@@ -99,6 +102,8 @@ export function CsvImport() {
                   <option value="pos">Positive (12.40)</option>
                 </Select>
               </label>
+              {col("Type (for unsigned amounts)", mapping.type, (v) => setMapping({ ...mapping, type: v }), true)}
+              </>
             )}
           </div>
           {mapped ? (

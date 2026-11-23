@@ -24,11 +24,9 @@ export function formatGBP(pence: number, opts: { whole?: boolean } = {}) {
   return opts.whole ? gbpWhole.format(Math.round(pence / 100)) : gbp.format(pence / 100);
 }
 
-/** "4.5" | "£4.50" | "1,204" | "-3" → pence; null if not a number. */
+/** Typed amounts: "4.5" | "£4.50" | "4,50" | "1,204" | "-3" → pence; null if not a number. */
 export function parseAmount(input: string): number | null {
-  const s = input.replace(/[£,\s]/g, "");
-  if (!/^-?\d+(\.\d{1,2})?$/.test(s)) return null;
-  return Math.round(Number(s) * 100);
+  return parseBankAmount(input)?.pence ?? null;
 }
 
 /** Occurrence dates of a planned item within [fromKey, toKey]. */
@@ -146,8 +144,23 @@ export function byCategory(txns: Txn[]) {
 // CSV import (bank exports)
 // ---------------------------------------------------------------------------
 
-/** RFC-4180-style CSV: quoted fields, escaped quotes, commas and newlines inside quotes. */
-export function parseCsv(text: string): string[][] {
+/** Which character separates columns: comma, semicolon, tab or pipe (counted outside quotes). */
+export function detectDelimiter(text: string): "," | ";" | "\t" | "|" {
+  const line = text.replace(/^﻿/, "").split(/\r?\n/).find((l) => l.trim()) ?? "";
+  const counts: Record<string, number> = { ",": 0, ";": 0, "\t": 0, "|": 0 };
+  let quoted = false;
+  for (const c of line) {
+    if (c === '"') quoted = !quoted;
+    else if (!quoted && c in counts) counts[c]++;
+  }
+  const best = (Object.keys(counts) as Array<"," | ";" | "\t" | "|">).reduce((a, b) => (counts[b] > counts[a] ? b : a), ",");
+  return counts[best] > 0 ? best : ",";
+}
+
+export const DELIMITER_NAME: Record<string, string> = { ",": "comma", ";": "semicolon", "\t": "tab", "|": "pipe" };
+
+/** RFC-4180-style CSV with a configurable separator: quoted fields, escaped quotes, separators/newlines in quotes. */
+export function parseCsv(text: string, delimiter: string = detectDelimiter(text)): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -168,7 +181,7 @@ export function parseCsv(text: string): string[][] {
       } else if (c === '"') quoted = false;
       else field += c;
     } else if (c === '"') quoted = true;
-    else if (c === ",") {
+    else if (c === delimiter) {
       row.push(field);
       field = "";
     } else if (c === "\n" || c === "\r") {
@@ -177,7 +190,56 @@ export function parseCsv(text: string): string[][] {
     } else field += c;
   }
   endRow();
-  return rows;
+  // Drop trailing columns that are empty in every row (from a trailing separator).
+  const width = Math.max(0, ...rows.map((r) => r.length));
+  let keep = width;
+  while (keep > 0 && rows.every((r) => !(r[keep - 1] ?? "").trim())) keep--;
+  return keep < width ? rows.map((r) => r.slice(0, keep)) : rows;
+}
+
+/**
+ * Bank amount text → signed pence, plus whether the text carried an explicit sign.
+ * Handles "£12.40", "-12,40", "1.234,56", "1,234.56", "(12.40)", "12.40 DR", "12.40 CR", "+3000", "GBP 5".
+ */
+export function parseBankAmount(input: string): { pence: number; signed: boolean } | null {
+  let s = input.trim();
+  if (!s) return null;
+  let negative = false;
+  let signed = false;
+  if (/^\(.*\)$/.test(s)) {
+    negative = true;
+    signed = true;
+    s = s.slice(1, -1);
+  }
+  const suffix = s.match(/\s*\b(DR|CR)\.?$/i);
+  if (suffix) {
+    signed = true;
+    if (suffix[1].toUpperCase() === "DR") negative = true;
+    s = s.slice(0, suffix.index).trim();
+  }
+  s = s.replace(/GBP|EUR|USD|£|€|\$/gi, "").replace(/\s/g, "");
+  if (/^[-−–]/.test(s) || /-$/.test(s)) {
+    negative = true;
+    signed = true;
+    s = s.replace(/^[-−–]|-$/g, "");
+  } else if (s.startsWith("+")) {
+    signed = true;
+    s = s.slice(1);
+  }
+  const lastDot = s.lastIndexOf(".");
+  const lastComma = s.lastIndexOf(",");
+  if (lastDot >= 0 && lastComma >= 0) {
+    // Both present: whichever comes last is the decimal point.
+    s = lastComma > lastDot ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    // Only commas: "12,40" is a decimal comma; "1,204" is thousands.
+    s = /,\d{1,2}$/.test(s) && s.split(",").length === 2 ? s.replace(",", ".") : s.replace(/,/g, "");
+  } else if ((s.match(/\./g) ?? []).length > 1) {
+    s = s.replace(/\./g, ""); // "1.234.567"
+  }
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  const pence = Math.round(Number(s) * 100);
+  return { pence: negative ? -pence : pence, signed };
 }
 
 const MONTHS: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
@@ -188,14 +250,14 @@ function validDate(y: number, mo: number, d: number) {
   return t.getUTCMonth() === mo - 1 ? t.toISOString().slice(0, 10) : null;
 }
 
-/** UK bank date formats → "yyyy-mm-dd": 18/11/2026, 2026-11-18, 18 Nov 2026, 18-Nov-26. */
+/** UK bank date formats → "yyyy-mm-dd": 18/11/2026, 18.11.2026, 2026-11-18, 18 Nov 2026, 18-Nov-26; a trailing time is ignored. */
 export function parseBankDate(input: string): string | null {
-  const s = input.trim();
+  const s = input.trim().replace(/^"|"$/g, "");
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return validDate(+m[1], +m[2], +m[3]);
-  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:[ T,].*)?$/);
   if (m) return validDate(m[3].length === 2 ? 2000 + +m[3] : +m[3], +m[2], +m[1]);
-  m = s.match(/^(\d{1,2})[\s-]([A-Za-z]{3})[a-z]*[\s-](\d{2}|\d{4})$/);
+  m = s.match(/^(\d{1,2})[\s-]([A-Za-z]{3})[a-z]*[\s-](\d{2}|\d{4})(?:[ T,].*)?$/);
   if (m && MONTHS[m[2].toLowerCase()]) return validDate(m[3].length === 2 ? 2000 + +m[3] : +m[3], MONTHS[m[2].toLowerCase()], +m[1]);
   return null;
 }
@@ -215,12 +277,35 @@ export function guessCategory(description: string) {
   return "Other";
 }
 
-export type CsvMapping = { date: number; description: number; amount?: number; moneyOut?: number; moneyIn?: number; outIsNegative: boolean };
+/** Direction words banks put in a "Type" column. */
+const TYPE_IN = /\bcredit\b|\bcr\b|deposit|refund|incoming|received|money in|paid in|salary|interest|reversal|faster payment in|transfer in/i;
+const TYPE_OUT = /\bdebit\b|\bdr\b|payment|purchase|card|withdrawal|\batm\b|cash|standing order|transfer out|money out|paid out|\bfee\b|charge/i;
+
+export function directionFromType(value: string): "in" | "out" | null {
+  if (!value.trim()) return null;
+  // "Direct debit", "Card payment" etc. are out; check "in" words only if no "out" words win.
+  const out = TYPE_OUT.test(value);
+  const inn = TYPE_IN.test(value);
+  if (out && !inn) return "out";
+  if (inn && !out) return "in";
+  return null;
+}
+
+export type CsvMapping = {
+  date: number;
+  description: number;
+  amount?: number;
+  moneyOut?: number;
+  moneyIn?: number;
+  /** Optional "Type" column used to tell money in from money out when amounts carry no sign. */
+  type?: number;
+  outIsNegative: boolean;
+};
 export type ImportRow = { occurredOn: string; description: string; amountPence: number; category: string; importKey: string };
 
-/** Guess which columns hold what from the header row. */
-export function guessMapping(header: string[]): CsvMapping | null {
-  const h = header.map((x) => x.toLowerCase());
+/** Guess which columns hold what from the header, using a sample of rows to work out the sign convention. */
+export function guessMapping(header: string[], sample: string[][] = []): CsvMapping | null {
+  const h = header.map((x) => x.toLowerCase().trim());
   const find = (...names: RegExp[]) => {
     for (const n of names) {
       const i = h.findIndex((x) => n.test(x));
@@ -228,23 +313,39 @@ export function guessMapping(header: string[]): CsvMapping | null {
     }
     return -1;
   };
-  const date = find(/^date$/, /date/);
-  const description = find(/desc/, /narrative/, /details/, /payee/, /merchant/, /^name$/, /reference/);
-  const amount = find(/^amount/, /^value$/);
-  const moneyOut = find(/paid out/, /money out/, /debit/, /withdraw/);
-  const moneyIn = find(/paid in/, /money in/, /credit/, /deposit/);
+  const date = find(/^date$/, /transaction date/, /date/);
+  const description = find(/desc/, /narrative/, /details/, /payee/, /merchant/, /^name$/, /counter ?party/, /reference/, /memo/);
+  // A single signed column first: "Amount", "Debit/Credit", "Value"…
+  const amount = find(/^amount/, /debit\s*\/\s*credit/, /credit\s*\/\s*debit/, /transaction amount/, /amount/, /^value$/);
+  const moneyOut = find(/paid out/, /money out/, /^debit/, /withdraw/, /out$/);
+  const moneyIn = find(/paid in/, /money in/, /^credit/, /deposit/, /in$/);
+  const type = find(/^type$/, /transaction type/, /dr\/cr/, /^cr\/dr/, /direction/);
   if (date < 0 || description < 0 || (amount < 0 && moneyOut < 0)) return null;
+
+  let outIsNegative = true;
+  let useType = false;
+  if (amount >= 0 && sample.length) {
+    const parsed = sample.map((r) => parseBankAmount(r[amount] ?? "")).filter((p): p is { pence: number; signed: boolean } => p !== null);
+    const anyNegative = parsed.some((p) => p.pence < 0);
+    // Signed amounts decide direction on their own. Only when every amount is
+    // unsigned is the Type column needed; with no Type column, positive = spending.
+    if (parsed.length && !anyNegative) {
+      if (type >= 0) useType = true;
+      else outIsNegative = false;
+    }
+  }
   return {
     date,
     description,
     amount: amount >= 0 ? amount : undefined,
     moneyOut: amount < 0 && moneyOut >= 0 ? moneyOut : undefined,
     moneyIn: amount < 0 && moneyIn >= 0 ? moneyIn : undefined,
-    outIsNegative: true,
+    type: useType && type !== description ? type : undefined,
+    outIsNegative,
   };
 }
 
-/** Apply a mapping. Rows that don't parse are counted as skipped, never guessed. */
+/** Apply a mapping. Rows that don't parse are counted as skipped, never guessed. Positive result = money out. */
 export function mapRows(rows: string[][], m: CsvMapping): { rows: ImportRow[]; skipped: number } {
   const out: ImportRow[] = [];
   const seen = new Map<string, number>();
@@ -254,13 +355,17 @@ export function mapRows(rows: string[][], m: CsvMapping): { rows: ImportRow[]; s
     const description = (r[m.description] ?? "").slice(0, 200);
     let pence: number | null = null;
     if (m.amount !== undefined) {
-      const v = parseAmount(r[m.amount] ?? "");
-      if (v !== null) pence = m.outIsNegative ? -v : v;
+      const v = parseBankAmount(r[m.amount] ?? "");
+      if (v) {
+        const dir = m.type !== undefined ? directionFromType(r[m.type] ?? "") : null;
+        if (!v.signed && dir) pence = dir === "out" ? Math.abs(v.pence) : -Math.abs(v.pence);
+        else pence = m.outIsNegative ? -v.pence : v.pence;
+      }
     } else {
-      const o = m.moneyOut !== undefined ? parseAmount(r[m.moneyOut] ?? "") : null;
-      const i = m.moneyIn !== undefined ? parseAmount(r[m.moneyIn] ?? "") : null;
-      if (o) pence = Math.abs(o);
-      else if (i) pence = -Math.abs(i);
+      const o = m.moneyOut !== undefined ? parseBankAmount(r[m.moneyOut] ?? "") : null;
+      const i = m.moneyIn !== undefined ? parseBankAmount(r[m.moneyIn] ?? "") : null;
+      if (o && o.pence) pence = Math.abs(o.pence);
+      else if (i && i.pence) pence = -Math.abs(i.pence);
     }
     if (!occurredOn || pence === null || pence === 0) {
       skipped++;
