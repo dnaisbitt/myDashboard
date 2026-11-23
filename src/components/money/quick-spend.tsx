@@ -80,7 +80,7 @@ export function QuickSpend({ todayKey, recentCategories, compact }: { todayKey: 
               aria-checked={category === c}
               onClick={() => setCategory(c)}
               className={cn(
-                "h-8 rounded-full px-3 text-small transition-colors",
+                "h-8 rounded-sm px-3 text-small transition-colors",
                 category === c ? "bg-ink text-canvas" : "bg-sunken text-ink-2 hover:text-ink",
               )}
             >

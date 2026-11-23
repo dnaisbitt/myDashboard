@@ -228,7 +228,7 @@ function FocusCheck({ id }: { id: string }) {
           type="button"
           disabled={pending}
           onClick={() => answer(o)}
-          className="h-7 rounded-full border border-rule px-3 text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+          className="h-7 rounded-sm border border-rule px-3 text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
         >
           {l}
         </button>

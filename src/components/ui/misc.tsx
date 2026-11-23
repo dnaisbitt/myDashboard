@@ -31,7 +31,7 @@ export function Planned({ phase, className }: { phase: string; className?: strin
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border border-dashed border-rule-strong px-2 py-px text-micro whitespace-nowrap text-ink-2",
+        "inline-flex items-center rounded-[3px] border border-dashed border-rule-strong px-2 py-px text-micro whitespace-nowrap text-ink-2",
         className,
       )}
     >

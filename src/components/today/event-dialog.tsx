@@ -123,7 +123,7 @@ function EventForm({ draft, onClose, tz }: { draft: EventDraft; onClose: () => v
                   type="button"
                   onClick={() => setLength(m)}
                   aria-pressed={active}
-                  className={cn("h-7 rounded-full px-3", active ? "bg-ink text-canvas" : "bg-sunken text-ink-2 hover:text-ink")}
+                  className={cn("h-7 rounded-sm px-3", active ? "bg-ink text-canvas" : "bg-sunken text-ink-2 hover:text-ink")}
                 >
                   {m} min
                 </button>

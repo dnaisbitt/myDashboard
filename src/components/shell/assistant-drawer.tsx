@@ -185,7 +185,7 @@ function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
         ) : msgs.length === 0 ? (
           <div className="flex flex-col gap-3">
             <p className="text-small text-ink-2">It reads your tasks, schedule, habits, goals and money each time you ask, and only suggests.</p>
-            <div className="flex flex-col items-start gap-1.5">
+            <div className="flex flex-col divide-y divide-rule border-y border-rule">
               {(
                 [
                   ["plan-day", "Plan my day"],
@@ -196,7 +196,7 @@ function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
                   key={m}
                   type="button"
                   onClick={() => setMode(m)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+                  className="flex min-h-10 items-center gap-2 py-2 text-left text-small text-ink-2 transition-colors hover:text-ink"
                 >
                   <CalendarPlus size={14} aria-hidden />
                   {label}
@@ -207,7 +207,7 @@ function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
                   key={a.key}
                   type="button"
                   onClick={() => send({ action: a.key })}
-                  className="rounded-full border border-rule px-3 py-1.5 text-left text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+                  className="flex min-h-10 items-center py-2 pl-[22px] text-left text-small text-ink-2 transition-colors hover:text-ink"
                 >
                   {a.label}
                 </button>
@@ -215,7 +215,7 @@ function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
               <Link
                 href="/share"
                 onClick={onClose}
-                className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+                className="flex min-h-10 items-center gap-2 py-2 text-left text-small text-ink-2 transition-colors hover:text-ink"
               >
                 <MessageSquareText size={14} aria-hidden />
                 Add dates from a message (e.g. WhatsApp)
@@ -223,7 +223,7 @@ function Chat({ tz, onClose }: { tz: string; onClose: () => void }) {
               <button
                 type="button"
                 onClick={() => setMode("breakdown")}
-                className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-small text-ink-2 transition-colors hover:border-rule-strong hover:text-ink"
+                className="flex min-h-10 items-center gap-2 py-2 text-left text-small text-ink-2 transition-colors hover:text-ink"
               >
                 <ListPlus size={14} aria-hidden />
                 Break a project or idea into tasks

@@ -25,7 +25,7 @@ export function Decide({ items, nowMs, tz, limit = 3 }: { items: Task[]; nowMs: 
       notify(r.ok ? ok : (r.error ?? "Something went wrong."), { tone: r.ok ? "ok" : "error" });
     });
   const age = (t: Task) => daysBetweenKeys(dateKey(t.status === "inbox" ? t.created_at : t.updated_at, tz), dateKey(nowMs, tz));
-  const action = "h-7 rounded-full px-2.5 text-small text-ink-2 transition-colors hover:bg-sunken hover:text-ink disabled:opacity-50";
+  const action = "h-7 rounded-sm px-2.5 text-small text-ink-2 transition-colors hover:bg-sunken hover:text-ink disabled:opacity-50";
 
   return (
     <section aria-labelledby="decide-title" className="flex flex-col gap-2">
