@@ -503,3 +503,18 @@ test("amounts: decimal commas, thousands, brackets, DR/CR, currency, typed input
   assert.equal(parseBankDate("23/11/2026 14:03"), "2026-11-23");
   assert.equal(parseBankDate("23.11.2026"), "2026-11-23");
 });
+
+test("csv: the user's bank export (£ inside signed amounts, tab or semicolon, + balance column)", () => {
+  const rows = [
+    ["Date", "Type", "Merchant/Description", "Debit/Credit", "Balance"],
+    ["22/10/2026", "CARD PAYMENT", "SHOP A", "-£10.20", "+£6572.59"],
+    ["22/10/2026", "CARD PAYMENT", "SHOP B", "-£5.00", "+£6582.79"],
+    ["21/10/2026", "FASTER PAYMENT", "STUDENT FINANCE", "+£3000.00", "+£6587.79"],
+  ];
+  for (const sep of ["\t", ";"]) {
+    const parsed = parseCsv(rows.map((r) => r.join(sep) + (sep === ";" ? ";" : "")).join("\r\n"));
+    const { rows: out, skipped } = mapRows(parsed.slice(1), guessMapping(parsed[0], parsed.slice(1))!);
+    assert.equal(skipped, 0);
+    assert.deepEqual(out.map((r) => r.amountPence), [1020, 500, -300000]);
+  }
+});
